@@ -22,8 +22,8 @@ import org.deuce.reflection.UnsafeHolder;
 import org.deuce.transform.Exclude;
 
 /**
- * A java agent to dynamically instrument transactional supported classes/  
- * 
+ * A java agent to dynamically instrument transactional supported classes/
+ *
  * @author Guy Korland
  * @since 1.0
  */
@@ -51,22 +51,28 @@ public class Agent implements ClassFileTransformer {
 		}
 		return classfileBuffer;
 	}
-	
+
 	/**
+	 * Transforms a single class' bytecode appropriately (provided the class is not marked as excluded, either explicitly
+	 * using the @Exclude annotation or through a JVM argument).
+	 *
 	 * @param offline <code>true</code> if this is an offline transform.
 	 */
 	private List<ClassByteCode> transform(String className, byte[] classfileBuffer, boolean offline)
 	throws IllegalClassFormatException {
-
+		// since this class could have nested classes, we have a list storing the transformed bytecode for each such class [guess...may be wrong]
 		ArrayList<ClassByteCode> byteCodes = new ArrayList<ClassByteCode>();
+
+		// if the class name starts with a $ (i.e. it's a nested class) or it is marked as excluded, then perform no transformation; put the bytecode into the output untransformed
 		if (className.startsWith("$") || ExcludeIncludeStore.exclude(className)){
 			byteCodes.add(new ClassByteCode( className, classfileBuffer));
 			return byteCodes;
 		}
-		
+
 		if (logger.isLoggable(Level.FINER))
 			logger.finer("Transforming: Class=" + className);
 
+		// Reads the bytecode and calculate the frames, to support 1.5- code.
 		classfileBuffer = addFrames(className, classfileBuffer);
 
 		if( GLOBAL_TXN){
@@ -80,6 +86,7 @@ public class Agent implements ClassFileTransformer {
 				fieldsHolder = new ExternalFieldsHolder(className);
 			}
 			ByteCodeVisitor cv = new org.deuce.transform.asm.ClassTransformer( className, fieldsHolder);
+			// start visiting the class (its bytecode); returned is the transformed class bytecode
 			byte[] bytecode = cv.visit(classfileBuffer);
 			byteCodes.add(new ClassByteCode( className, bytecode));
 			if(offline) {
@@ -98,13 +105,13 @@ public class Agent implements ClassFileTransformer {
 		}
 		return byteCodes;
 	}
-	
+
 	/**
 	 * Reads the bytecode and calculate the frames, to support 1.5- code.
-	 * 
-	 * @param className class to manipulate 
+	 *
+	 * @param className class to manipulate
 	 * @param classfileBuffer original byte code
-	 *  
+	 *
 	 * @return bytecode with frames
 	 */
 	private byte[] addFrames(String className, byte[] classfileBuffer) {
@@ -117,13 +124,20 @@ public class Agent implements ClassFileTransformer {
 			return classfileBuffer;
 		}
 	}
-
+	
+	/**
+	 * Used for ONLINE instrumentation.
+	 * 
+	 * @param agentArgs
+	 * @param inst
+	 * @throws Exception
+	 */
 	public static void premain(String agentArgs, Instrumentation inst) throws Exception{
 		UnsafeHolder.getUnsafe();
 		logger.fine("Starting Duece agent");
 		inst.addTransformer(new Agent());
 	}
-	
+
 	/**
 	 * Used for offline instrumentation.
 	 * @param args input jar & output jar
@@ -133,23 +147,23 @@ public class Agent implements ClassFileTransformer {
 	public static void main(String[] args) throws Exception{
 		UnsafeHolder.getUnsafe();
 		logger.fine("Starting Duece translator");
-		
+
 		// TODO check args
 		Agent agent = new Agent();
 		agent.transformJar(args[0], args[1]);
 	}
-	
+
 	private void transformJar( String inFileNames, String outFilenames) throws IOException, IllegalClassFormatException {
-		
+
 		String[] inFileNamesArr = inFileNames.split(";");
 		String[] outFilenamesArr = outFilenames.split(";");
 		if(inFileNamesArr.length != outFilenamesArr.length)
 			throw new IllegalArgumentException("Input files list length doesn't match output files list.");
-		
+
 		for(int i=0 ; i<inFileNamesArr.length ; ++i){
 			String inFileName = inFileNamesArr[i];
 			String outFilename = outFilenamesArr[i];
-			
+
 			final int size = 4096;
 			byte[] buffer = new byte[size];
 			ByteArrayOutputStream baos = new ByteArrayOutputStream(size);
@@ -179,7 +193,7 @@ public class Agent implements ClassFileTransformer {
 						List<ClassByteCode> transformBytecodes = transform( className, bytecode, true);
 						for(ClassByteCode byteCode : transformBytecodes){
 							JarEntry transformedEntry = new JarEntry(byteCode.getClassName() + ".class");
-							jarOS.putNextEntry( transformedEntry); 
+							jarOS.putNextEntry( transformedEntry);
 							jarOS.write( byteCode.getBytecode());
 						}
 					}
@@ -200,7 +214,7 @@ public class Agent implements ClassFileTransformer {
 			}
 		}
 	}
-	
+
 	private void verbose(List<ClassByteCode> byteCodes) throws FileNotFoundException,
 	IOException {
 		File verbose = new File( "verbose");

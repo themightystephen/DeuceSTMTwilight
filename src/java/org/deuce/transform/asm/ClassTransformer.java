@@ -18,38 +18,46 @@ import org.deuce.transform.asm.type.TypeCodeResolver;
 import org.deuce.transform.asm.type.TypeCodeResolverFactory;
 import org.deuce.transform.util.Util;
 
+// this is probably the primary class involved in performing the transformation steps described in the DeuceSTM paper
+
 @Exclude
 public class ClassTransformer extends ByteCodeVisitor implements FieldsHolder{
+	// fields representing expected aspects of a class, e.g. is it an interface, an enumeration, what fields does this class have, is it marked as excluded
 
-	final private static String ENUM_DESC = Type.getInternalName(Enum.class); 
-	
+	final private static String ENUM_DESC = Type.getInternalName(Enum.class);
+
 	private boolean exclude = false;
 	private boolean visitclinit = false;
 	final private LinkedList<Field> fields = new LinkedList<Field>();
 	private String staticField = null;
-	
+
 	final static public String EXCLUDE_DESC = Type.getDescriptor(Exclude.class);
 	final static private String ANNOTATION_NAME = Type.getInternalName(Annotation.class);
 	private boolean isInterface;
 	private boolean isEnum;
 	private MethodVisitor staticMethod;
-	
+
+	// haven't fully worked out what this is for. FieldsHolder holds NEW fields for transformed classes. Difference between Field and FieldsHolder? FieldsHolder is an interface. Field is a class.
 	private final FieldsHolder fieldsHolder;
 
 	public ClassTransformer( String className, FieldsHolder fieldsHolder){
 		super( className);
+		// if fieldsHolder is null, then that means we're doing ONLINE instrumentation
 		this.fieldsHolder = fieldsHolder == null ? this : fieldsHolder;
 	}
 
+	// visits the header of the class
 	@Override
 	public void visit(final int version, final int access, final String name,
 			final String signature, final String superName, final String[] interfaces) {
-		
+
 		fieldsHolder.visit(superName);
 		isInterface = (access & Opcodes.ACC_INTERFACE) != 0;
 		isEnum = ENUM_DESC.equals(superName);
-		
+
 		for(String inter : interfaces){
+			// appears that annotations are treated as interfaces...maybe...
+			// but I don't understand why exclude is set to true here
 			if( inter.equals(ANNOTATION_NAME)){
 				exclude = true;
 				break;
@@ -70,7 +78,7 @@ public class ClassTransformer extends ByteCodeVisitor implements FieldsHolder{
 
 	/**
 	 * Creates a new static filed for each existing field.
-	 * The field will be statically initialized to hold the field address.   
+	 * The field will be statically initialized to hold the field address.
 	 */
 	@Override
 	public FieldVisitor visitField(int access, String name, String desc, String signature,
@@ -79,14 +87,14 @@ public class ClassTransformer extends ByteCodeVisitor implements FieldsHolder{
 		FieldVisitor fieldVisitor = super.visitField(access, name, desc, signature, value);
 		if( exclude)
 			return fieldVisitor;
-		
+
 		// Define as constant
 		int fieldAccess = Opcodes.ACC_FINAL | Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC;
 		String addressFieldName = Util.getAddressField( name);
-		
+
 		final boolean include = (access & Opcodes.ACC_FINAL) == 0;
 		final boolean isStatic = (access & Opcodes.ACC_STATIC) != 0;
-		if( include){ // include field if not final 
+		if( include){ // include field if not final
 			Field field = new Field(name, addressFieldName);
 			fields.add( field);
 			if(isStatic)
@@ -96,7 +104,7 @@ public class ClassTransformer extends ByteCodeVisitor implements FieldsHolder{
 			// If this field is final mark with a negative address.
 			fieldsHolder.addField( fieldAccess, addressFieldName, Type.LONG_TYPE.getDescriptor(), -1L);
 		}
-		
+
 		return fieldVisitor;
 	}
 
@@ -105,7 +113,7 @@ public class ClassTransformer extends ByteCodeVisitor implements FieldsHolder{
 			String[] exceptions) {
 
 		MethodVisitor originalMethod =  super.visitMethod(access, name, desc, signature, exceptions);
-		
+
 		if( exclude)
 			return originalMethod;
 
@@ -114,7 +122,7 @@ public class ClassTransformer extends ByteCodeVisitor implements FieldsHolder{
 			createNativeMethod(access, name, desc, signature, exceptions);
 			return originalMethod;
 		}
-		
+
 		if( name.equals("<clinit>")) {
 			staticMethod = originalMethod;
 			visitclinit = true;
@@ -126,13 +134,13 @@ public class ClassTransformer extends ByteCodeVisitor implements FieldsHolder{
 			int fieldAccess = Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC;
 			fieldsHolder.addField( fieldAccess, StaticMethodTransformer.CLASS_BASE,
 					Type.getDescriptor(Object.class), null);
-			
+
 			MethodVisitor staticMethodVisitor = fieldsHolder.getStaticMethodVisitor();
 			return createStaticMethodTransformer( originalMethod, staticMethodVisitor);
 		}
 		Method newMethod = createNewMethod(name, desc);
 
-		// Create a new duplicate SYNTHETIC method and remove the final marker if has one. 
+		// Create a new duplicate SYNTHETIC method and remove the final marker if has one.
 		MethodVisitor copyMethod =  super.visitMethod((access | Opcodes.ACC_SYNTHETIC) & ~Opcodes.ACC_FINAL, name, newMethod.getDescriptor(),
 				signature, exceptions);
 
@@ -150,31 +158,31 @@ public class ClassTransformer extends ByteCodeVisitor implements FieldsHolder{
 		MethodVisitor copyMethod =  super.visitMethod(newAccess | Opcodes.ACC_SYNTHETIC, name, newMethod.getDescriptor(),
 				signature, exceptions);
 		copyMethod.visitCode();
-		
+
 		final boolean isStatic = (access & Opcodes.ACC_STATIC) != 0;
-		
+
 		//Call onIrrevocableAccess
 		int argumentsSize = Util.calcArgumentsSize(isStatic, newMethod);
 		copyMethod.visitVarInsn(Opcodes.ALOAD, argumentsSize - 1); // load context
 		copyMethod.visitMethodInsn( Opcodes.INVOKESTATIC, ContextDelegator.CONTEXT_DELEGATOR_INTERNAL,
 				ContextDelegator.IRREVOCABLE_METHOD_NAME, ContextDelegator.IRREVOCABLE_METHOD_DESC);
-		
-		
+
+
 		// load the arguments before calling the original method
-		
+
 		int place = 0; // place on the stack
 		if(!isStatic){
 			copyMethod.visitVarInsn(Opcodes.ALOAD, 0); // load this
 			place = 1;
 		}
-		
+
 		Type[] argumentTypes = newMethod.getArgumentTypes();
 		for(int i=0 ; i<(argumentTypes.length-1) ; ++i){
 			Type type = argumentTypes[i];
 			copyMethod.visitVarInsn(type.getOpcode(Opcodes.ILOAD), place);
 			place += type.getSize();
 		}
-		
+
 		// call the original method
 		copyMethod.visitMethodInsn(isStatic ? Opcodes.INVOKESTATIC : Opcodes.INVOKEVIRTUAL, className, name, desc);
 		TypeCodeResolver returnReolver = TypeCodeResolverFactory.getReolver(newMethod.getReturnType());
@@ -192,7 +200,7 @@ public class ClassTransformer extends ByteCodeVisitor implements FieldsHolder{
 		//Didn't see any static method till now, so creates one.
 		if(!exclude){
 			super.visitAnnotation(EXCLUDE_DESC, false);
-			if( !visitclinit && fields.size() > 0) { // creates a new <clinit> in case we didn't see one already. 
+			if( !visitclinit && fields.size() > 0) { // creates a new <clinit> in case we didn't see one already.
 
 				//TODO avoid creating new static method in case of external fields holder
 				visitclinit = true;
@@ -204,7 +212,7 @@ public class ClassTransformer extends ByteCodeVisitor implements FieldsHolder{
 
 			}
 			if(isEnum){ // Build a dummy ordinal() method
-				MethodVisitor ordinalMethod = 
+				MethodVisitor ordinalMethod =
 					super.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_SYNTHETIC, "ordinal", "(Lorg/deuce/transaction/Context;)I", null, null);
 				ordinalMethod.visitCode();
 				ordinalMethod.visitVarInsn(Opcodes.ALOAD, 0);
@@ -222,7 +230,7 @@ public class ClassTransformer extends ByteCodeVisitor implements FieldsHolder{
 		return new StaticMethodTransformer( originalMethod, staticMethod, fields, staticField,
 				className, fieldsHolder.getFieldsHolderName(className));
 	}
-	
+
 	public static Method createNewMethod(String name, String desc) {
 		Method method = new Method( name, desc);
 		Type[] arguments = method.getArgumentTypes();
@@ -233,21 +241,21 @@ public class ClassTransformer extends ByteCodeVisitor implements FieldsHolder{
 
 		return new Method( name, method.getReturnType(), newArguments);
 	}
-	
+
 	@Override
 	public void addField(int fieldAccess, String addressFieldName, String desc, Object value){
 		super.visitField( fieldAccess, addressFieldName, desc, null, value);
 	}
-	
+
 	@Override
 	public void close(){
 	}
-	
+
 	@Override
 	public MethodVisitor getStaticMethodVisitor(){
 		return staticMethod;
 	}
-	
+
 	@Override
 	public String getFieldsHolderName(String owner){
 		return owner;
