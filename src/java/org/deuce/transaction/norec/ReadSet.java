@@ -12,7 +12,7 @@ import org.deuce.transaction.norec.field.IntFieldAccess;
 import org.deuce.transaction.norec.field.LongFieldAccess;
 import org.deuce.transaction.norec.field.ObjectFieldAccess;
 import org.deuce.transaction.norec.field.ShortFieldAccess;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * @author Pascal Felber

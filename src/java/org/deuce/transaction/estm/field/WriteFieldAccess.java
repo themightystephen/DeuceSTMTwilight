@@ -1,7 +1,7 @@
 package org.deuce.transaction.estm.field;
 
 import org.deuce.transaction.estm.field.ReadFieldAccess.Field.Type;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * The write entry

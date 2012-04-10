@@ -1,7 +1,7 @@
 package org.deuce.transaction;
 
 import org.deuce.objectweb.asm.Type;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * If thrown under the context of an active transaction the current transaction

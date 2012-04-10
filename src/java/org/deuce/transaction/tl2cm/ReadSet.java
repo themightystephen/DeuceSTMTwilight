@@ -1,7 +1,7 @@
 package org.deuce.transaction.tl2cm;
 
 import org.deuce.transaction.tl2cm.field.ReadFieldAccess;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * Represents the transaction read set. Based on Guy Korland's work on <code>org.deuce.transaction.tl2.*</code>

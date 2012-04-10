@@ -4,7 +4,7 @@ import java.lang.reflect.Field;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 import sun.misc.Unsafe;
 

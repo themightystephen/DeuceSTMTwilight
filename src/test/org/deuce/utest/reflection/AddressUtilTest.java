@@ -9,7 +9,7 @@ package org.deuce.utest.reflection;
 import junit.framework.TestCase;
 
 import org.deuce.reflection.AddressUtil;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 import org.junit.Assert;
 
 /**

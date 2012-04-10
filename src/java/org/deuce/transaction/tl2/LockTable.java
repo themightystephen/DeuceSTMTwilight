@@ -3,7 +3,7 @@ package org.deuce.transaction.tl2;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 
 import org.deuce.transaction.TransactionException;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 @Exclude
 public class LockTable {

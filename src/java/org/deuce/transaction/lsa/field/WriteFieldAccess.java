@@ -2,7 +2,7 @@ package org.deuce.transaction.lsa.field;
 
 import org.deuce.transaction.lsa.field.Field;
 import org.deuce.transaction.lsa.field.Field.Type;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * @author Pascal Felber

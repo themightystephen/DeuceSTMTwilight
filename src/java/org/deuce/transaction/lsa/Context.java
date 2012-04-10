@@ -10,7 +10,7 @@ import org.deuce.transaction.lsa.field.WriteFieldAccess;
 import org.deuce.transaction.lsa.ReadSet;
 import org.deuce.transaction.lsa.WriteSet;
 import org.deuce.transaction.util.BooleanArrayList;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * LSA implementation

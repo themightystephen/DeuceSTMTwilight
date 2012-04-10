@@ -3,7 +3,7 @@ package org.deuce.transaction.estm;
 import org.deuce.transaction.TransactionException;
 import org.deuce.transaction.estm.Context.LockTable;
 import org.deuce.transaction.estm.field.ReadFieldAccess;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * LastReadEntries implement a pool of k=2 read entries

@@ -18,7 +18,7 @@ import org.deuce.transaction.norec.field.ShortFieldAccess;
 import org.deuce.transaction.norec.field.Field.Type;
 import org.deuce.transaction.norec.ReadSet;
 import org.deuce.transaction.norec.WriteSet;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * LSA implementation

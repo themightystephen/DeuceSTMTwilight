@@ -15,7 +15,7 @@ import org.deuce.transaction.lsacm.WriteSet;
 import org.deuce.transaction.lsacm.ContentionManager;
 import org.deuce.transaction.lsacm.ContentionManager.ConflictType;
 import org.deuce.transaction.util.BooleanArrayList;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * LSA implementation

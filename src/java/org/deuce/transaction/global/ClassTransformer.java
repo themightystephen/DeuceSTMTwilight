@@ -1,9 +1,9 @@
 package org.deuce.transaction.global;
 
 import org.deuce.objectweb.asm.MethodVisitor;
-import org.deuce.transform.asm.ByteCodeVisitor;
+import org.deuce.transform.commons.BaseClassTransformer;
 
-public class ClassTransformer extends ByteCodeVisitor{
+public class ClassTransformer extends BaseClassTransformer{
 
 	public ClassTransformer( String className) {
 		super( className);

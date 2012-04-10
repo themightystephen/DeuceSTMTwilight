@@ -1,6 +1,6 @@
 package org.deuce.transaction.lsacm.cm;
 
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 import org.deuce.transaction.lsacm.Context;
 import org.deuce.transaction.lsacm.ContentionManager;
 

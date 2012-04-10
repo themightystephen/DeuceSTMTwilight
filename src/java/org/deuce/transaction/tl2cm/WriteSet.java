@@ -4,7 +4,7 @@ import java.util.Iterator;
 
 import org.deuce.transaction.tl2cm.field.ReadFieldAccess;
 import org.deuce.transaction.tl2cm.field.WriteFieldAccess;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 import org.deuce.trove.THashMap;
 import org.deuce.trove.TObjectProcedure;
 

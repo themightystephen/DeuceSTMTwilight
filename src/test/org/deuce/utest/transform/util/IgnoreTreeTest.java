@@ -1,6 +1,6 @@
 package org.deuce.utest.transform.util;
 
-import org.deuce.transform.util.IgnoreTree;
+import org.deuce.transform.commons.util.IgnoreTree;
 
 import junit.framework.Assert;
 import junit.framework.TestCase;

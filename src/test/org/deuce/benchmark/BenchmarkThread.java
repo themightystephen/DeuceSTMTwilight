@@ -1,6 +1,6 @@
 package org.deuce.benchmark;
 
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * @author Pascal Felber

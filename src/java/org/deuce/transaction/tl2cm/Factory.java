@@ -9,7 +9,7 @@ import org.deuce.transaction.tl2cm.cm.KillPrioLS;
 import org.deuce.transaction.tl2cm.cm.Polite;
 import org.deuce.transaction.tl2cm.cm.Polka;
 import org.deuce.transaction.tl2cm.cm.Suicide;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * Factory for creating contention mangers

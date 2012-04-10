@@ -3,7 +3,7 @@ package org.deuce.transaction.tl2cm.cm;
 import org.deuce.transaction.tl2cm.Context;
 import org.deuce.transaction.tl2cm.field.ReadFieldAccess;
 import org.deuce.transaction.tl2cm.field.WriteFieldAccess;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * Aggressive contention manager. Its policy is to always abort the

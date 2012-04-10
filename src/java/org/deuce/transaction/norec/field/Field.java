@@ -1,7 +1,7 @@
 package org.deuce.transaction.norec.field;
 
 import org.deuce.reflection.UnsafeHolder;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 import sun.misc.Unsafe;
 

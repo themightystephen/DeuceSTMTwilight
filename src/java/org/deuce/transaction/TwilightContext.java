@@ -18,10 +18,10 @@ import org.deuce.transaction.tl2twilight.field.ReadFieldAccess;
  * @author stephen
  */
 public interface TwilightContext extends org.deuce.transaction.Context {
-	// ??
-//	final static public Type CONTEXT_TYPE = Type.getType( Context.class);
-//	final static public String CONTEXT_INTERNAL = Type.getInternalName(Context.class);
-//	final static public String CONTEXT_DESC = Type.getDescriptor(Context.class);
+	// Constants used in dynamically generated code
+	final static public Type TWILIGHTCONTEXT_TYPE = Type.getType(TwilightContext.class);
+	final static public String TWILIGHTCONTEXT_INTERNAL = Type.getInternalName(TwilightContext.class);
+	final static public String TWILIGHTCONTEXT_DESC = Type.getDescriptor(TwilightContext.class);
 
 	// Twilight Workflow Operations
 	boolean prepareCommit();

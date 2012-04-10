@@ -3,26 +3,32 @@ package org.deuce.transaction;
 import org.deuce.objectweb.asm.Type;
 import org.deuce.reflection.AddressUtil;
 import org.deuce.transaction.Context;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
- * Cluster static delegate methods.
- * These methods delegates calls from the dynamic generated code to the context.
- * 
- * 
+ * <p>The methods here are called in the generated code. The methods then simply make delegate calls
+ * to the Context.</p>
+ *
+ * <p>The many (public and private) constants here are simply (for the most part) the method names
+ * and descriptors for the delegate methods listed in this class. There are a few methods, such
+ * as getWriteMethodDesc(Type), getStaticWriteMethodDesc(Type), and getReadMethodDesc(Type) that
+ * are helper methods for use by the transformation code that return the appropriate method
+ * descriptor when given a Type.</p>
+ *
  * @author	Guy Korland
  * @since	1.0
  *
  */
 public class ContextDelegator {
+	final static public Class<? extends Context> DEFAULT_CONTEXT_CLASS = org.deuce.transaction.lsa.Context.class;
 
 	final static public String CONTEXT_DELEGATOR_INTERNAL = Type.getInternalName(ContextDelegator.class);
-	
+
 	final static public String BEFORE_READ_METHOD_NAME = "beforeReadAccess";
 	final static public String BEFORE_READ_METHOD_DESC = "(Ljava/lang/Object;J" + Context.CONTEXT_DESC +")V";
 	final static public String IRREVOCABLE_METHOD_NAME = "onIrrevocableAccess";
 	final static public String IRREVOCABLE_METHOD_DESC = "(" + Context.CONTEXT_DESC + ")V";
-	
+
 	final static public String WRITE_METHOD_NAME = "onWriteAccess";
 	final static public String WRITE_ARR_METHOD_NAME = "onArrayWriteAccess";
 	final static public String STATIC_WRITE_METHOD_NAME = "addStaticWriteAccess";
@@ -102,7 +108,7 @@ public class ContextDelegator {
 	@Exclude
 	private static class ContextThreadLocal extends ThreadLocal<Context>
 	{
-		private Class<? extends Context> contextClass;  
+		private Class<? extends Context> contextClass;
 
 		public ContextThreadLocal(){
 			String className = System.getProperty( "org.deuce.transaction.contextClass");
@@ -114,7 +120,7 @@ public class ContextDelegator {
 					e.printStackTrace(); // TODO add logger
 				}
 			}
-			this.contextClass = org.deuce.transaction.lsa.Context.class;
+			this.contextClass = DEFAULT_CONTEXT_CLASS;
 		}
 
 		@Override
@@ -285,7 +291,7 @@ public class ContextDelegator {
 	static public void addStaticWriteAccess( float value, Object obj, long field, Context context) {
 		context.onWriteAccess(obj, value, field);
 	}
-	static public void addStaticWriteAccess( double value, Object obj, long field, Context context) { 
+	static public void addStaticWriteAccess( double value, Object obj, long field, Context context) {
 		context.onWriteAccess(obj, value, field);
 	}
 
@@ -329,7 +335,7 @@ public class ContextDelegator {
 		context.beforeReadAccess(arr, address);
 		return context.onReadAccess(arr, arr[index], address);
 	}
-	
+
 	static public <T> void onArrayWriteAccess( T[] arr,  int index, T value, Context context) {
 		T t = arr[index]; // dummy access just to check the index in range
 		context.onWriteAccess(arr, value, OBJECT_ARR_BASE + OBJECT_ARR_SCALE*index);
@@ -362,9 +368,9 @@ public class ContextDelegator {
 		double t = arr[index]; // dummy access just to check the index in range
 		context.onWriteAccess(arr, value, DOUBLE_ARR_BASE + DOUBLE_ARR_SCALE*index);
 	}
-	
+
 	static public void onIrrevocableAccess(Context context) {
 		context.onIrrevocableAccess();
 	}
-	
+
 }

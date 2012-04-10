@@ -7,12 +7,12 @@
 package org.deuce.transaction;
 
 import org.deuce.objectweb.asm.Type;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * All the STM implementations should implement this interface.
  * Using the -Dorg.deuce.transaction.contextClass property one can
- * switch between the different implementations. 
+ * switch between the different implementations.
  *
  * @author	Guy Korland
  * @since	1.0
@@ -20,7 +20,7 @@ import org.deuce.transform.Exclude;
 @Exclude
 public interface Context
 {
-	final static public Type CONTEXT_TYPE = Type.getType( Context.class);
+	final static public Type CONTEXT_TYPE = Type.getType(Context.class);
 	final static public String CONTEXT_INTERNAL = Type.getInternalName(Context.class);
 	final static public String CONTEXT_DESC = Type.getDescriptor(Context.class);
 
@@ -33,13 +33,13 @@ public interface Context
 
 	/**
 	 * Called on commit
-	 * @return <code>true</code> on success 
+	 * @return <code>true</code> on success
 	 */
 	boolean commit();
 
 	/**
 	 * Called on rollback, rollback might be called more than once in a row.
-	 * But, can't be called after {@link #commit()} without an {@link #init(int, String)} call in between. 
+	 * But, can't be called after {@link #commit()} without an {@link #init(int, String)} call in between.
 	 */
 	void rollback();
 
@@ -64,7 +64,7 @@ public interface Context
 	void onWriteAccess( Object obj, long value, long field);
 	void onWriteAccess( Object obj, float value, long field);
 	void onWriteAccess( Object obj, double value, long field);
-	
+
 	/** Called before entering an irrevocable block*/
 	void onIrrevocableAccess();
 }

@@ -21,7 +21,7 @@ import org.deuce.transaction.tl2cm.field.ObjectWriteFieldAccess;
 import org.deuce.transaction.tl2cm.field.ReadFieldAccess;
 import org.deuce.transaction.tl2cm.field.ShortWriteFieldAccess;
 import org.deuce.transaction.tl2cm.field.WriteFieldAccess;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 import org.deuce.trove.TObjectProcedure;
 
 /**

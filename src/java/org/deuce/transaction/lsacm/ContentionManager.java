@@ -1,7 +1,7 @@
 package org.deuce.transaction.lsacm;
 
 import org.deuce.transaction.lsacm.Context;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * @author Pascal Felber

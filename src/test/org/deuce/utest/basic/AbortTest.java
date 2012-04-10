@@ -8,7 +8,7 @@ import junit.framework.TestCase;
 import org.deuce.Atomic;
 import org.deuce.transaction.AbortTransactionException;
 import org.deuce.transaction.TransactionException;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * @author guy

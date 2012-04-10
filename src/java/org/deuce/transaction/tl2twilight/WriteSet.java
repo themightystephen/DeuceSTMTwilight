@@ -3,7 +3,7 @@ package org.deuce.transaction.tl2twilight;
 
 import org.deuce.transaction.tl2twilight.field.ReadFieldAccess;
 import org.deuce.transaction.tl2twilight.field.WriteFieldAccess;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 import org.deuce.trove.THashSet;
 import org.deuce.trove.TIntArrayList;
 import org.deuce.trove.TIntProcedure;

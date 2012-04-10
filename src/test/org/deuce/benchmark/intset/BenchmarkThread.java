@@ -2,7 +2,7 @@ package org.deuce.benchmark.intset;
 
 import java.util.Random;
 
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * @author Pascal Felber

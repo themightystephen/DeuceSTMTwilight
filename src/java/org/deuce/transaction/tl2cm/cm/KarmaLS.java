@@ -3,7 +3,7 @@ package org.deuce.transaction.tl2cm.cm;
 import org.deuce.transaction.tl2cm.Context;
 import org.deuce.transaction.tl2cm.field.ReadFieldAccess;
 import org.deuce.transaction.tl2cm.field.WriteFieldAccess;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * The Karma LockStealer contention manager resolves conflicts exactly the same as the {@code Karma} contention manager. The only

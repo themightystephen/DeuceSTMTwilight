@@ -4,7 +4,7 @@ import org.deuce.transaction.TransactionException;
 import org.deuce.transaction.lsacm.field.ReadFieldAccess;
 import org.deuce.transaction.lsacm.LockTable;
 import org.deuce.transaction.lsacm.Context;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * @author Pascal Felber

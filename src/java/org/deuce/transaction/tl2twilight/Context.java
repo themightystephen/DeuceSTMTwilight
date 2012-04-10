@@ -22,7 +22,7 @@ import org.deuce.transaction.tl2twilight.field.ShortWriteFieldAccess;
 import org.deuce.transaction.tl2twilight.field.WriteFieldAccess;
 import org.deuce.transaction.tl2twilight.pool.Pool;
 import org.deuce.transaction.tl2twilight.pool.ResourceFactory;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 import org.deuce.trove.THashMap;
 import org.deuce.trove.THashSet;
 import org.deuce.trove.TObjectProcedure;

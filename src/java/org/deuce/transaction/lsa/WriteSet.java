@@ -3,7 +3,7 @@ package org.deuce.transaction.lsa;
 import org.deuce.transaction.lsa.field.Field.Type;
 import org.deuce.transaction.lsa.field.WriteFieldAccess;
 import org.deuce.transaction.lsa.LockTable;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 import org.deuce.trove.THashMap;
 
 /**

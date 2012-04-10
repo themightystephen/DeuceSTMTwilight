@@ -1,7 +1,7 @@
 package org.deuce.transaction.tl2twilight.pool;
 
 import org.deuce.transaction.tl2.field.ReadFieldAccess;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * Represents the transaction read set. [this appears to be the most recent version cf. the ReadSet class -- says it's from v1.0, plus it uses generics]

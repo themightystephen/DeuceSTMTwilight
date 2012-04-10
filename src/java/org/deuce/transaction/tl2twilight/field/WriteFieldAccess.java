@@ -1,6 +1,6 @@
 package org.deuce.transaction.tl2twilight.field;
 
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * Represents a base class for field write access.

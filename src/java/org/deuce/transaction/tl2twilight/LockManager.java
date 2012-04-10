@@ -3,7 +3,7 @@ package org.deuce.transaction.tl2twilight;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 
 import org.deuce.transaction.TransactionException;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 // this represents the striped locking that takes place on all the elements of memory...
 // here we have an AtomicIntegerArray of locks -- there are 2^20 =~ 1 million locks (each 32-bit lock words)

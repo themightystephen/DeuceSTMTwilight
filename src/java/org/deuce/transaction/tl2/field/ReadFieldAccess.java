@@ -1,7 +1,7 @@
 package org.deuce.transaction.tl2.field;
 
 import org.deuce.transaction.tl2.LockTable;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * Represents a base class for field write access.  

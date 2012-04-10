@@ -2,7 +2,7 @@ package org.deuce.transaction.tl2cm;
 
 import java.util.concurrent.atomic.AtomicLongArray;
 
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * Table of locks for accessed locations. Each lock is comprised of a 64-bit number that encodes

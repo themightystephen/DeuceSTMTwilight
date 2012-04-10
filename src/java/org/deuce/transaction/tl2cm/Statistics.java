@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * This class provides statistics collecting functionality for TL2CM

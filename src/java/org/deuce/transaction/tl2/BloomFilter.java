@@ -1,6 +1,6 @@
 package org.deuce.transaction.tl2;
 
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * Implements Bloom filter map

@@ -18,7 +18,7 @@ import org.deuce.transaction.tl2.field.ShortWriteFieldAccess;
 import org.deuce.transaction.tl2.field.WriteFieldAccess;
 import org.deuce.transaction.tl2.pool.Pool;
 import org.deuce.transaction.tl2.pool.ResourceFactory;
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 import org.deuce.trove.TObjectProcedure;
 
 /**

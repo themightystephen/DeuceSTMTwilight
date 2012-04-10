@@ -3,7 +3,7 @@ package org.deuce.reflection;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 
-import org.deuce.transform.Exclude;
+import org.deuce.transform.commons.Exclude;
 
 @Exclude
 public class AddressUtil {
