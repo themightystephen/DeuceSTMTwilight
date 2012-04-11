@@ -274,7 +274,9 @@ final public class Context implements org.deuce.transaction.TwilightContext {
 	 * <p>NOTE: I believe it is allowable for the programmer to restart from either within the transactional part of the
 	 * transaction or the twilight zone. I know for certain it is allowable within the twilight zone (the examples
 	 * in Bienuisa's thesis do so). I would have thought it is fine within the transactional code as well
-	 * but there are no concrete examples where this is done.</p>
+	 * but there are no concrete examples where this is done. --- UPDATE: well, I know its okay ordinarily with TL2
+	 * and any other algorithm because you can just throw a TransactionException inside an @Atomic method's body
+	 * to cause a retry/restart.</p>
 	 */
 	public void restart() {
 //		// NOTE: Only allow calls to restart() from within the Twilight code, otherwise it's a runtime exception (would be nice if we could statically check this)

@@ -1,14 +1,14 @@
 package org.deuce.transform.twilight;
 
 import org.deuce.objectweb.asm.AnnotationVisitor;
-import org.deuce.transform.twilight.method.ConsistentMethod;
+import org.deuce.transform.twilight.method.TwilightConsistentMethod;
 
 public class ConsistentAnnotationVisitor implements AnnotationVisitor {
 
-	private final ConsistentMethod method;
+	private final TwilightConsistentMethod method;
 	private final AnnotationVisitor annotation;
 
-	public ConsistentAnnotationVisitor(ConsistentMethod method, AnnotationVisitor annotation) {
+	public ConsistentAnnotationVisitor(TwilightConsistentMethod method, AnnotationVisitor annotation) {
 		this.method = method;
 		this.annotation = annotation;
 	}

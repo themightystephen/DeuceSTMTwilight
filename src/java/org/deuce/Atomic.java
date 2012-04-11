@@ -8,7 +8,7 @@ import java.lang.annotation.Target;
 
 /**
  *
- * @author	Guy Korland
+ * @author Guy Korland
  * @since 1.0
  */
 @Target(METHOD)

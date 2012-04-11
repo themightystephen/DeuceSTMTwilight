@@ -15,5 +15,5 @@ import java.lang.annotation.Target;
 @Target(METHOD)
 @Retention(CLASS)
 public @interface TwilightConsistent {
-
+	String name();
 }

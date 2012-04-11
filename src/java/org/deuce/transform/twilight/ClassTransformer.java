@@ -25,6 +25,29 @@ import org.deuce.transform.twilight.method.StaticMethodTransformer;
 /**
  * Class-level visitor for performing transformations on bytecode to call into Twilight API.
  *
+ * Transformations are applied to EVERY class which is not in the exclude list.
+ *
+ * The transformations performed by this visitor and the other MethodVisitors it invokes include:
+ * - For every field, a constant is added (xxx__ADDRESS__) to keep the relative location of the field in the object for fast access (using the actual memory address I think...?)
+ * - For every field, I AM NOT SURE IF TWO ACCESSORS ARE ADDED.
+ * - For every class (?? or only ones with at least one static field), a constant is added (__CLASS_BASE__) to keep the reference to the
+ * class definition and allow fast access to static fields
+ * - Every non-@Atomic method has two copies of it:
+ * 		a) the original, unchanged version (uninstrumented version) (called when not inside a transaction)
+ * 		b) a transactional version which where direct field accesses are replaced with transactional field accesses (called when inside a transaction)
+ * - Every @Atomic method has two copies of it:
+ * 		a) an instrumented version which controls the start and end of a transaction, and calls the transactional version (below) inside the 'retry loop' (starts and ends the transaction)
+ * 		b) a transactional version which where direct field accesses are replaced with transactional field accesses (called when inside a transaction)
+ *   There is no original, uninstrumented version of @Atomic methods.
+ * - For every instance field, class initialiser is appended (or added if none currently exists) to initialise the synthetic constants (i.e. initialising the xxx__ADDRESS__ synthetic fields)
+ *
+ * Optimisations relating to instrumentation:
+ * - we do not instrument accesses to final fields as they cannot be modified after creation
+ * - fields accessed as part of the constructor are ignored as they are not accessible by
+ * concurrent threads until the constructor returns
+ * - instead of generating accessor methods, we inline the code of getters and setters directly
+ * in the transactional code
+ *
  * @author Stephen Tuttlebee
  */
 @Exclude
@@ -158,22 +181,22 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 		}
 		Method newMethod = createNewMethod(name, desc);
 
-		// Create a new duplicate SYNTHETIC method and remove the final marker if has one.
-		MethodVisitor copyMethod =  super.visitMethod((access | Opcodes.ACC_SYNTHETIC) & ~Opcodes.ACC_FINAL, name, newMethod.getDescriptor(),
-				signature, exceptions);
+		// create a new duplicate SYNTHETIC method and remove the final marker if has one.
+		// make sure the duplicate method won't be final to support special cases like enum and user hand crafted duplicated methods
+		MethodVisitor copyMethod =  super.visitMethod((access | Opcodes.ACC_SYNTHETIC) & ~Opcodes.ACC_FINAL, name,
+				newMethod.getDescriptor(), signature, exceptions);
 
-		return new MethodTransformer( originalMethod, copyMethod, className,
-				access, name, desc, newMethod, fieldsHolder);
+		return new MethodTransformer(originalMethod, copyMethod, className,	access, name, desc, newMethod, fieldsHolder);
 	}
 
 	@Override
 	public void visitEnd() {
-		//Didn't see any static method till now, so creates one.
+		//Didn't see any static method till now, so creates one. (TODO: did he mean 'static method' here, or did he mean 'static initialiser method'?)
 		if(!exclude){
 			// add @Exclude annotation to transformed class (to stop (remote) possibility of getting transformed again!)
 			super.visitAnnotation(EXCLUDE_DESC, false);
 
-			// creates a new (moreorless empty) <clinit> in case we didn't see one already
+			// creates a new (essentially empty) <clinit> if we haven't see one already
 			if(fields.size() > 0 && !visitclinit) {
 				//TODO avoid creating new static method in case of external fields holder
 				visitclinit = true;
@@ -182,7 +205,6 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 				method.visitInsn(Opcodes.RETURN);
 				method.visitMaxs(100, 100); // TODO set the right value
 				method.visitEnd();
-
 			}
 			if(isEnum){ // Build a dummy ordinal() method
 				MethodVisitor ordinalMethod =
@@ -201,7 +223,7 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 
 	/**
 	 * Creates synthetic method that calls into Context API to ensure irrevocable access
-	 * before making a delegate call to the native method.
+	 * before making a delegate call to the original native method.
 	 */
 	private void createNativeMethod(int access, String name, String desc, String signature, String[] exceptions) {
 		Method newMethod = createNewMethod(name, desc);

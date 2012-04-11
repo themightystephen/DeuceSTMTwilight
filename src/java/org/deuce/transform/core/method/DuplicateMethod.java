@@ -8,21 +8,32 @@ import org.deuce.objectweb.asm.commons.AnalyzerAdapter;
 import org.deuce.objectweb.asm.commons.Method;
 import org.deuce.transaction.Context;
 import org.deuce.transaction.ContextDelegator;
-import org.deuce.transform.commons.util.Util;
-import org.deuce.transform.core.ClassTransformer;
-import org.deuce.transform.commons.ExcludeIncludeStore;
+import org.deuce.transform.twilight.ClassTransformer;
 import org.deuce.transform.commons.FieldsHolder;
+import org.deuce.transform.commons.util.Util;
+import org.deuce.transform.commons.ExcludeIncludeStore;
 import static org.deuce.objectweb.asm.Opcodes.*;
 
 /**
  * Responsible for creating the mirror version for the original
  * method that includes instrumentation.
  *
+ * i.e. all direct field accesses are transformed into call into Context API (via the
+ * ContextDelegator class). It also deals with accesses to array elements equally
+ * well too. It also changes method calls to call transactional versions of methods
+ * (where possible).
+ *
+ * [I think this will be unchanged -- because the key things it does is to change
+ * any method calls to invoke the transactional methods of the owning objects (where
+ * possible; i.e. where the owning object's class is not in the exclude list) and
+ * to replace field accesses with appropriate method calls to the Context API
+ * (indirectly via ContextDelegator)].
+ *
  * @author Guy Korland
  */
-public class DuplicateMethod extends MethodAdapter{
+public class DuplicateMethod extends MethodAdapter {
 
-	final static public String LOCAL_VARIBALE_NAME = "__transactionContext__";
+	final static public String LOCAL_VARIABLE_NAME = "__transactionContext__";
 
 	private final int argumentsSize;
 	private final FieldsHolder fieldsHolder;
@@ -42,16 +53,21 @@ public class DuplicateMethod extends MethodAdapter{
 		this.analyzerAdapter = analyzerAdapter;
 	}
 
+	/**
+	 * Modifies method calls inside this transactional/duplicate method to call the transactional /
+	 * duplicate method of the owning class EXCEPT in the hopefully non-existent case where the owning
+	 * class of the method being called is on the exclude list (if this is the case, then the
+	 * programmer should not have excluded the class or should have ensured that the class was not used
+	 * inside a transaction).
+	 */
 	@Override
-	public void visitMethodInsn(int opcode, String owner, String name,
-			String desc)
-	{
-		if( ExcludeIncludeStore.exclude(owner))
-		{
+	public void visitMethodInsn(int opcode, String owner, String name, String desc) {
+		if(ExcludeIncludeStore.exclude(owner)) {
+			// call uninstrumented method
 			super.visitMethodInsn(opcode, owner, name, desc); // ... = foo( ...
 		}
-		else
-		{
+		else {
+			// call duplicate synthetic method instead of uninstrumented method (i.e. the synthetic method requires a Context argument)
 			super.visitVarInsn(ALOAD, argumentsSize - 1); // load context
 			Method newMethod = ClassTransformer.createNewMethod(name, desc);
 			super.visitMethodInsn(opcode, owner, name, newMethod.getDescriptor()); // ... = foo( ...
@@ -60,12 +76,12 @@ public class DuplicateMethod extends MethodAdapter{
 
 
 	/**
-	 * Adds for each field visited a call to the context.
+	 * When we see a field access, replace it with appropriate calls to the Context (via the
+	 * ContextDelegator).
 	 */
 	@Override
 	public void visitFieldInsn(int opcode, String owner, String name, String desc) {
-		if( ExcludeIncludeStore.exclude( owner) ||
-				name.contains("$")){ // Syntactic TODO remove this limitation
+		if(ExcludeIncludeStore.exclude(owner) || name.contains("$")) { // Syntactic TODO remove this limitation
 			super.visitFieldInsn(opcode, owner, name, desc); // ... = foo( ...
 			return;
 		}
@@ -89,18 +105,18 @@ public class DuplicateMethod extends MethodAdapter{
 
 			super.visitInsn(DUP);
 			super.visitFieldInsn(opcode, owner, name, desc);
-			super.visitFieldInsn( GETSTATIC, fieldsHolderName, Util.getAddressField(name) , "J");
+			super.visitFieldInsn(GETSTATIC, fieldsHolderName, Util.getAddressField(name) , "J");
 			super.visitVarInsn(ALOAD, argumentsSize - 1); // load context
-			super.visitMethodInsn( INVOKESTATIC, ContextDelegator.CONTEXT_DELEGATOR_INTERNAL,
+			super.visitMethodInsn(INVOKESTATIC, ContextDelegator.CONTEXT_DELEGATOR_INTERNAL,
 					ContextDelegator.READ_METHOD_NAME, ContextDelegator.getReadMethodDesc(type));
 
-			if( type.getSort() >= Type.ARRAY) // non primitive
-				super.visitTypeInsn( CHECKCAST, Type.getType(desc).getInternalName());
+			if(type.getSort() >= Type.ARRAY) // non primitive
+				super.visitTypeInsn(CHECKCAST, Type.getType(desc).getInternalName());
 			break;
 		case PUTFIELD:
-			super.visitFieldInsn( GETSTATIC, fieldsHolderName, Util.getAddressField(name) , "J");
+			super.visitFieldInsn(GETSTATIC, fieldsHolderName, Util.getAddressField(name) , "J");
 			super.visitVarInsn(ALOAD, argumentsSize - 1); // load context
-			super.visitMethodInsn( INVOKESTATIC, ContextDelegator.CONTEXT_DELEGATOR_INTERNAL,
+			super.visitMethodInsn(INVOKESTATIC, ContextDelegator.CONTEXT_DELEGATOR_INTERNAL,
 					ContextDelegator.WRITE_METHOD_NAME, ContextDelegator.getWriteMethodDesc(type));
 			break;
 		case GETSTATIC: // check support for static fields
@@ -271,7 +287,7 @@ public class DuplicateMethod extends MethodAdapter{
 		if( this.argumentsSize ==  index + 1 && !addContextToTable)
 		{
 			addContextToTable = true;
-			super.visitLocalVariable(LOCAL_VARIBALE_NAME, Context.CONTEXT_DESC, null,
+			super.visitLocalVariable(LOCAL_VARIABLE_NAME, Context.CONTEXT_DESC, null,
 					firstLabel, lastLabel, index);
 		}
 

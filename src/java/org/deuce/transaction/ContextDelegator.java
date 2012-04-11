@@ -7,7 +7,10 @@ import org.deuce.transform.commons.Exclude;
 
 /**
  * <p>The methods here are called in the generated code. The methods then simply make delegate calls
- * to the Context.</p>
+ * to the Context. The methods from the Context that are actually called from here include
+ * beforeReadAccess, onReadAccess, onIrrevocableAccess, and onWriteAccess. Other Context methods
+ * such as init, commit, and rollback are not called from the delegator. [I assume they're called
+ * on the Context directly in the generated code].</p>
  *
  * <p>The many (public and private) constants here are simply (for the most part) the method names
  * and descriptors for the delegate methods listed in this class. There are a few methods, such
@@ -254,6 +257,8 @@ public class ContextDelegator {
 	static public void onWriteAccess( Object obj, short value, long field, Context context) {
 		context.onWriteAccess(obj, value, field);
 	}
+	// I think 'field' is just the address of the field (relative to its owning object?). I think obj is the object which the field belongs to. Value is the value we want to write. Context is just the context.
+	// So naturally, the thing that varies in all these onWriteAccess methods is the type of the value stored in the field.
 	static public void onWriteAccess( Object obj, int value, long field, Context context) {
 		context.onWriteAccess(obj, value, field);
 	}

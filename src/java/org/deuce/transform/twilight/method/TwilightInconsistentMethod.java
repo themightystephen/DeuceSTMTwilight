@@ -24,7 +24,7 @@ import static org.deuce.objectweb.asm.Opcodes.*;
  *
  * @author Guy Korland
  */
-public class ConsistentMethod extends MethodAdapter{
+public class TwilightInconsistentMethod extends MethodAdapter{
 
 	final static public String ATOMIC_DESCRIPTOR = Type.getDescriptor(Atomic.class);
 	final static private AtomicInteger ATOMIC_BLOCK_COUNTER = new AtomicInteger(0);
@@ -40,7 +40,7 @@ public class ConsistentMethod extends MethodAdapter{
 	final private int variablesSize;
 	final private Method newMethod;
 
-	public ConsistentMethod(MethodVisitor mv, String className, String methodName,
+	public TwilightInconsistentMethod(MethodVisitor mv, String className, String methodName,
 			String descriptor, Method newMethod, boolean isStatic) {
 		super(mv);
 		this.className = className;
@@ -63,14 +63,14 @@ public class ConsistentMethod extends MethodAdapter{
 	@Override
 	public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
 		final AnnotationVisitor visitAnnotation = super.visitAnnotation(desc, visible);
-		if( AtomicMethod.ATOMIC_DESCRIPTOR.equals(desc)){
+		if( TwilightAtomicMethod.ATOMIC_DESCRIPTOR.equals(desc)){
 			return new AnnotationVisitor(){
 				public void visit(String name, Object value) {
 					if( name.equals("retries"))
-						ConsistentMethod.this.retries = (Integer)value;
+						TwilightInconsistentMethod.this.retries = (Integer)value;
 
 					if( name.equals("metainf"))
-						ConsistentMethod.this.metainf = (String)value;
+						TwilightInconsistentMethod.this.metainf = (String)value;
 
 					visitAnnotation.visit(name, value);
 				}

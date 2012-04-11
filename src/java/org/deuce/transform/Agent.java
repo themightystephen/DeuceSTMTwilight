@@ -88,7 +88,7 @@ public class Agent implements ClassFileTransformer {
 		// Reads the bytecode and calculate the frames, to support 1.5- code.
 		classfileBuffer = addFrames(className, classfileBuffer);
 
-		if( GLOBAL_TXN){
+		if(GLOBAL_TXN){
 			//ByteCodeVisitor cv = new org.deuce.transaction.global.ClassTransformer( className); // TODO: commented out this for now
 			org.deuce.transform.commons.BaseClassTransformer cv = new org.deuce.transaction.global.ClassTransformer( className); // FIXME: using ByteCodeVisitor from core package for now...
 			byte[] bytecode = cv.visit(classfileBuffer);
@@ -112,6 +112,7 @@ public class Agent implements ClassFileTransformer {
 
 			// start visiting the class (its bytecode); returned is the transformed class bytecode
 			ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+			TraceClassVisitor tcv; // TODO: use trace visitor to see the bytecode output on the console
 			// choose class transformer visitor, either the ordinary one or twilight one. Twilight one only compatible with use of a Context that implements TwilightContext interface.
 			BaseClassTransformer cv = ENABLE_TWILIGHT ? new org.deuce.transform.twilight.ClassTransformer(cw, className, fieldsHolder)
 													  : new org.deuce.transform.core.ClassTransformer(cw, className, fieldsHolder);

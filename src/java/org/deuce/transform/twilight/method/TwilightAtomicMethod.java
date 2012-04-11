@@ -2,7 +2,6 @@ package org.deuce.transform.twilight.method;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.deuce.Atomic;
 import org.deuce.objectweb.asm.AnnotationVisitor;
 import org.deuce.objectweb.asm.Label;
 import org.deuce.objectweb.asm.MethodAdapter;
@@ -15,32 +14,46 @@ import org.deuce.transaction.ContextDelegator;
 import org.deuce.transaction.TransactionException;
 import org.deuce.transform.commons.type.TypeCodeResolver;
 import org.deuce.transform.commons.type.TypeCodeResolverFactory;
+
 import static org.deuce.objectweb.asm.Opcodes.*;
 
 /**
- * Used to replaced the original @atomic method with a method that run the transaction loop.
+ * Used to replaced the original @TwilightAtomic method with a method that run the transaction loop.
  * On each round the transaction contest reinitialized and the duplicated method is called with the
  * transaction context.
  *
- * @author Guy Korland
+ * This Twilight version of AtomicMethod is nearly identical to the core version. However, the
+ * additions come when visiting @TwilightConsistent and @TwilightInconsistent methods [I'm
+ * more and more thinking I should change them to simply @Consistent and @Inconsistent; anyone
+ * using them who understands Twilight should instantly know what they're about].
+ *
+ * Apart from the slight modification I've made to visitCode(), I also must take into account
+ * the fact that @TwilightAtomic now has an additional name-value pair, 'name', which is used to link
+ * the @TwilightConsistent and @TwilightInconsistent methods with each other.
+ *
+ * @author Stephen Tuttlebee
  */
-public class InconsistentMethod extends MethodAdapter{
+public class TwilightAtomicMethod extends MethodAdapter {
 
-	final static public String ATOMIC_DESCRIPTOR = Type.getDescriptor(Atomic.class);
 	final static private AtomicInteger ATOMIC_BLOCK_COUNTER = new AtomicInteger(0);
+	final static private String ATOMIC_ANNOTATION_NAME_TXNAME = "name";
+	final static private String ATOMIC_ANNOTATION_NAME_RETRIES = "retries";
+	final static private String ATOMIC_ANNOTATION_NAME_METAINFORMATION = "metainf";
 
+	// attributes of @Atomic method's annotation
 	private Integer retries = Integer.getInteger("org.deuce.transaction.retries", Integer.MAX_VALUE);
 	private String metainf = "";//Integer.getInteger("org.deuce.transaction.retries", Integer.MAX_VALUE);
+	private String txname;
 
 	final private String className;
 	final private String methodName;
-	final private TypeCodeResolver returnReolver;
-	final private TypeCodeResolver[] argumentReolvers;
+	final private TypeCodeResolver returnResolver;
+	final private TypeCodeResolver[] argumentResolvers;
 	final private boolean isStatic;
 	final private int variablesSize;
 	final private Method newMethod;
 
-	public InconsistentMethod(MethodVisitor mv, String className, String methodName,
+	public TwilightAtomicMethod(MethodVisitor mv, String className, String methodName,
 			String descriptor, Method newMethod, boolean isStatic) {
 		super(mv);
 		this.className = className;
@@ -51,66 +64,84 @@ public class InconsistentMethod extends MethodAdapter{
 		Type returnType = Type.getReturnType(descriptor);
 		Type[] argumentTypes = Type.getArgumentTypes(descriptor);
 
-		returnReolver = TypeCodeResolverFactory.getReolver(returnType);
-		argumentReolvers = new TypeCodeResolver[ argumentTypes.length];
-		for( int i=0; i< argumentTypes.length ; ++i) {
-			argumentReolvers[ i] = TypeCodeResolverFactory.getReolver( argumentTypes[ i]);
+		returnResolver = TypeCodeResolverFactory.getReolver(returnType);
+		argumentResolvers = new TypeCodeResolver[argumentTypes.length];
+		for(int i = 0; i < argumentTypes.length; ++i) {
+			argumentResolvers[i] = TypeCodeResolverFactory.getReolver(argumentTypes[i]);
 		}
-		variablesSize = variablesSize( argumentReolvers, isStatic);
+		variablesSize = variablesSize(argumentResolvers, isStatic);
 	}
 
 
 	@Override
 	public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
-		final AnnotationVisitor visitAnnotation = super.visitAnnotation(desc, visible);
-		if( AtomicMethod.ATOMIC_DESCRIPTOR.equals(desc)){
-			return new AnnotationVisitor(){
+		final AnnotationVisitor av = super.visitAnnotation(desc, visible);
+
+		if(MethodTransformer.TWILIGHTATOMIC_DESCRIPTOR.equals(desc)) {
+			return new AnnotationVisitor() {
 				public void visit(String name, Object value) {
-					if( name.equals("retries"))
-						InconsistentMethod.this.retries = (Integer)value;
+					// retries
+					if(name.equals(ATOMIC_ANNOTATION_NAME_RETRIES))
+						TwilightAtomicMethod.this.retries = (Integer)value;
+					// meta information
+					if(name.equals(ATOMIC_ANNOTATION_NAME_METAINFORMATION))
+						TwilightAtomicMethod.this.metainf = (String)value;
+					// identifier
+					if(name.equals(ATOMIC_ANNOTATION_NAME_TXNAME))
+						TwilightAtomicMethod.this.txname = (String)value;
 
-					if( name.equals("metainf"))
-						InconsistentMethod.this.metainf = (String)value;
 
-					visitAnnotation.visit(name, value);
+					av.visit(name, value);
 				}
+
 				public AnnotationVisitor visitAnnotation(String name, String desc) {
-					return visitAnnotation.visitAnnotation(name, desc);
+					return av.visitAnnotation(name, desc);
 				}
+
 				public AnnotationVisitor visitArray(String name) {
-					return visitAnnotation.visitArray(name);
+					return av.visitArray(name);
 				}
+
 				public void visitEnd() {
-					visitAnnotation.visitEnd();
+					av.visitEnd();
 				}
+
 				public void visitEnum(String name, String desc, String value) {
-					visitAnnotation.visitEnum(name, desc, value);
+					av.visitEnum(name, desc, value);
 				}
 			};
 		}
-		return visitAnnotation;
+		return av;
 	}
 
-	/**
-	public static boolean foo(Object s) throws IOException{
+	/**	Twilight version ** -- changes include: change call to commit() to prepareCommit(), before returning 'result' variable,
+	 * call the @TwilightConsistent method of same 'id' if return value of prepareCommit() is true (if it exists), otherwise call
+	 * @TwilightInconsistent method of same 'id' (if it exists). Maybe need to determine if one or both exist first and then maybe
+	 * just call commit() if neither exist...??? Or just carry out some default actions.. [note: don't bother creating a new method
+	 * and calling it to achieve this, since the purpose of the extra method is just for a nice programmer interface -- the
+	 * underlying stuff here doesn't need to do it that way, provided we call the Context API methods in the right order]???
+	 *
+	 * Admittedly, it would be so much easier if the programmer themselves had to write prepareCommit() or an equivelent to it
+	 * and handle everything themselves all inside one @Atomic method rather than spread over three methods.
 
+	public static boolean foo(Object s) throws IOException{
 		Throwable throwable = null;
-		Context context = ContextDelegator.getInstance();
+		TwilightContext context = TwilightContextDelegator.getInstance();
 		boolean commit = true;
 		boolean result = true;
-		for( int i=10 ; i>0 ; --i)
+		for(int i = 10 ;i > 0 ;--i)
 		{
 			context.init(atomicBlockId, metainf);
 			try
 			{
 				result = foo(s,context);
 			}
-			catch( AbortTransactionException ex)
+			catch(AbortTransactionException ex)
 			{
 				context.rollback();
 				throw ex;
 			}
-			catch( TransactionException ex)
+			catch(TransactionException ex)
 			{
 				commit = false;
 			}
@@ -119,9 +150,9 @@ public class InconsistentMethod extends MethodAdapter{
 				throwable = ex;
 			}
 
-			if( commit )
+			if(commit)
 			{
-				if( context.commit()){
+				if(context.prepareCommit()){
 					if( throwable != null)
 						throw (IOException)throwable;
 					return result;
@@ -134,7 +165,6 @@ public class InconsistentMethod extends MethodAdapter{
 			}
 		}
 		throw new TransactionException();
-
 	}
 	 */
 	@Override
@@ -170,10 +200,10 @@ public class InconsistentMethod extends MethodAdapter{
 
 		Label l7 = new Label(); // ... result = null;
 		mv.visitLabel(l7);
-		if( returnReolver != null)
+		if( returnResolver != null)
 		{
-			mv.visitInsn( returnReolver.nullValueCode());
-			mv.visitVarInsn( returnReolver.storeCode(), resultIndex);
+			mv.visitInsn( returnResolver.nullValueCode());
+			mv.visitVarInsn( returnResolver.storeCode(), resultIndex);
 		}
 
 		Label l8 = new Label(); // for( int i=10 ; ... ; ...)
@@ -200,9 +230,9 @@ public class InconsistentMethod extends MethodAdapter{
 
 		// load the rest of the arguments
 		int local = isStatic ? 0 : 1;
-		for( int i=0 ; i < argumentReolvers.length ; ++i) {
-			mv.visitVarInsn(argumentReolvers[i].loadCode(), local);
-			local += argumentReolvers[i].localSize(); // move to the next argument
+		for( int i=0 ; i < argumentResolvers.length ; ++i) {
+			mv.visitVarInsn(argumentResolvers[i].loadCode(), local);
+			local += argumentResolvers[i].localSize(); // move to the next argument
 		}
 
 		mv.visitVarInsn(ALOAD, contextIndex); // load the context
@@ -212,8 +242,8 @@ public class InconsistentMethod extends MethodAdapter{
 		else
 			mv.visitMethodInsn(INVOKEVIRTUAL, className, methodName, newMethod.getDescriptor()); // ... = foo( ...
 
-		if( returnReolver != null)
-			mv.visitVarInsn(returnReolver.storeCode(), resultIndex); // result = ...
+		if( returnResolver != null)
+			mv.visitVarInsn(returnResolver.storeCode(), resultIndex); // result = ...
 
 		mv.visitLabel(l1);
 		Label l12 = new Label();
@@ -301,12 +331,12 @@ public class InconsistentMethod extends MethodAdapter{
 
 		// return
 		mv.visitLabel(l20);
-		if( returnReolver == null) {
+		if( returnResolver == null) {
 			mv.visitInsn( RETURN); // return;
 		}
 		else {
-			mv.visitVarInsn(returnReolver.loadCode(), resultIndex); // return result;
-			mv.visitInsn(returnReolver.returnCode());
+			mv.visitVarInsn(returnResolver.loadCode(), resultIndex); // return result;
+			mv.visitInsn(returnResolver.returnCode());
 		}
 
 		mv.visitJumpInsn(GOTO, l18);
@@ -334,8 +364,8 @@ public class InconsistentMethod extends MethodAdapter{
 		mv.visitLocalVariable("throwable", "Ljava/lang/Throwable;", null, l5, l24, throwableIndex);
 		mv.visitLocalVariable("context", Context.CONTEXT_DESC, null, l6, l24, contextIndex);
 		mv.visitLocalVariable("commit", "Z", null, l7, l24, commitIndex);
-		if( returnReolver != null)
-			mv.visitLocalVariable("result", returnReolver.toString(), null, l8, l24, resultIndex);
+		if( returnResolver != null)
+			mv.visitLocalVariable("result", returnResolver.toString(), null, l8, l24, resultIndex);
 		mv.visitLocalVariable("i", "I", null, l9, l23, indexIndex);
 		mv.visitLocalVariable("ex", "Lorg/deuce/transaction/AbortTransactionException;", null, l27, l28, exceptionIndex);
 		mv.visitLocalVariable("ex", "Lorg/deuce/transaction/TransactionException;", null, l13, l14, exceptionIndex);
