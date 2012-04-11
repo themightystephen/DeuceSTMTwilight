@@ -20,7 +20,7 @@ import org.deuce.transform.commons.type.TypeCodeResolver;
 import org.deuce.transform.commons.type.TypeCodeResolverFactory;
 import org.deuce.transform.commons.util.Util;
 import org.deuce.transform.twilight.method.MethodTransformer;
-import org.deuce.transform.twilight.method.StaticMethodTransformer;
+import org.deuce.transform.twilight.method.StaticInitialiserTransformer;
 
 /**
  * Class-level visitor for performing transformations on bytecode to call into Twilight API.
@@ -56,14 +56,14 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 
 	private boolean exclude = false;
 	private boolean visitclinit = false;
-	final private LinkedList<Field> fields = new LinkedList<Field>(); // TODO: are these the synthetic fields???
-	private String staticField = null; // non-null value indicates we need to add __CLASS_BASE__ to instrumented class (see StaticMethodTransformer)
+	final private LinkedList<Field> syntheticAddressFields = new LinkedList<Field>();
+	private String staticField = null; // non-null value indicates we need to add __CLASS_BASE__ to instrumented class (see StaticInitialiserTransformer)
 
 	final static public String EXCLUDE_DESC = Type.getDescriptor(Exclude.class);
 	final static private String ANNOTATION_NAME = Type.getInternalName(Annotation.class);
 	private boolean isInterface;
 	private boolean isEnum;
-	private MethodVisitor staticMethod;
+	private MethodVisitor staticInitialiserVisitor;
 
 	// haven't fully worked out what this is for. FieldsHolder holds NEW fields for transformed classes. Difference between Field and FieldsHolder? FieldsHolder is an interface. Field is a class.
 	private final FieldsHolder fieldsHolder;
@@ -80,6 +80,7 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 			final String signature, final String superName, final String[] interfaces) {
 
 		// TODO: when doing offline instrumentation, this will do some necessary visiting of its own and other preparation (see ExternalFieldsHolder class)
+		// when fieldsHolder is an ExternalFieldsHolder (i.e. offline instrumentation), visits of header of *new* class for holding fields
 		fieldsHolder.visit(superName);
 
 		// store useful information for later
@@ -131,7 +132,7 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 			addressFieldValue = null;
 			// include field if non final
 			Field field = new Field(name, addressFieldName);
-			fields.add(field);
+			syntheticAddressFields.add(field);
 			// also, if field is static, record it to indicate that there is at least one non final static field (i.e. a static field that's not a constant; by definition, constants do not need to be tracked)
 			if(isStatic)
 				staticField = name;
@@ -150,34 +151,35 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 	@Override
 	public MethodVisitor visitMethod(final int access, String name, String desc, String signature,
 			String[] exceptions) {
-		MethodVisitor originalMethod =  super.visitMethod(access, name, desc, signature, exceptions);
+		MethodVisitor originalMethodVisitor =  super.visitMethod(access, name, desc, signature, exceptions);
 
 		// again, if the class is on exclude list, return without performing any transformations (TODO: e.g. synthetic methods...?)
 		if(exclude)
-			return originalMethod;
+			return originalMethodVisitor;
 
 		// if method is native, create synthetic method that calls original method
 		final boolean isNative = (access & Opcodes.ACC_NATIVE) != 0;
 		if(isNative){
 			createNativeMethod(access, name, desc, signature, exceptions);
-			return originalMethod;
+			return originalMethodVisitor;
 		}
 
 		// if method is the class initialiser (aka static initialiser); TODO: work out exactly what's happening...
 		if(name.equals("<clinit>")) {
-			staticMethod = originalMethod; // TODO: seems almost pointless but used in a FieldHolder method further down
+			staticInitialiserVisitor = originalMethodVisitor;
 			visitclinit = true;
 
 			if(isInterface){
-				return originalMethod;
+				return originalMethodVisitor;
 			}
 
-			int fieldAccess = Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC;
-			fieldsHolder.addField(fieldAccess, StaticMethodTransformer.CLASS_BASE,
-					Type.getDescriptor(Object.class), null);
+			// existence of a class initialiser means we should add a __CLASS_BASE__ field to the class holding the synthetic fields [apparently...]
+			int addressFieldAccess = Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC; // *not* final to workaround JVM crash
+			fieldsHolder.addField(addressFieldAccess, StaticInitialiserTransformer.CLASS_BASE, Type.getDescriptor(Object.class), null);
 
-			MethodVisitor staticMethodVisitor = fieldsHolder.getStaticMethodVisitor();
-			return createStaticMethodTransformer(originalMethod, staticMethodVisitor);
+			MethodVisitor staticInitialiserVisitor = fieldsHolder.getStaticInitialiserVisitor();
+			return new StaticInitialiserTransformer( originalMethodVisitor, staticInitialiserVisitor, syntheticAddressFields, staticField,
+					className, fieldsHolder.getFieldsHolderName(className));
 		}
 		Method newMethod = createNewMethod(name, desc);
 
@@ -186,18 +188,19 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 		MethodVisitor copyMethod =  super.visitMethod((access | Opcodes.ACC_SYNTHETIC) & ~Opcodes.ACC_FINAL, name,
 				newMethod.getDescriptor(), signature, exceptions);
 
-		return new MethodTransformer(originalMethod, copyMethod, className,	access, name, desc, newMethod, fieldsHolder);
+		return new MethodTransformer(originalMethodVisitor, copyMethod, className,	access, name, desc, newMethod, fieldsHolder);
 	}
 
 	@Override
 	public void visitEnd() {
-		//Didn't see any static method till now, so creates one. (TODO: did he mean 'static method' here, or did he mean 'static initialiser method'?)
+		// again, assuming this class is not on the exclude list
 		if(!exclude){
 			// add @Exclude annotation to transformed class (to stop (remote) possibility of getting transformed again!)
 			super.visitAnnotation(EXCLUDE_DESC, false);
 
+			// if no static initialiser existed before or created yet, create one (TODO: did he mean 'static method' here, or did he mean 'static initialiser method'?)
 			// creates a new (essentially empty) <clinit> if we haven't see one already
-			if(fields.size() > 0 && !visitclinit) {
+			if(syntheticAddressFields.size() > 0 && !visitclinit) {
 				//TODO avoid creating new static method in case of external fields holder
 				visitclinit = true;
 				MethodVisitor method = visitMethod(Opcodes.ACC_STATIC, "<clinit>", "()V", null, null);
@@ -257,7 +260,7 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 
 		// call the original method
 		dupMethodWithContextArg.visitMethodInsn(isStatic ? Opcodes.INVOKESTATIC : Opcodes.INVOKEVIRTUAL, className, name, desc);
-		TypeCodeResolver returnResolver = TypeCodeResolverFactory.getReolver(newMethod.getReturnType());
+		TypeCodeResolver returnResolver = TypeCodeResolverFactory.getResolver(newMethod.getReturnType());
 		if(returnResolver == null) {
 			dupMethodWithContextArg.visitInsn(Opcodes.RETURN); // return;
 		}else {
@@ -267,11 +270,6 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 
 		// finish producing visit events on the new MethodVisitor that create the synthetic method
 		dupMethodWithContextArg.visitEnd();
-	}
-
-	private StaticMethodTransformer createStaticMethodTransformer(MethodVisitor originalMethod, MethodVisitor staticMethod){
-		return new StaticMethodTransformer( originalMethod, staticMethod, fields, staticField,
-				className, fieldsHolder.getFieldsHolderName(className));
 	}
 
 	/**
@@ -308,8 +306,8 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 	}
 
 	@Override
-	public MethodVisitor getStaticMethodVisitor(){
-		return staticMethod;
+	public MethodVisitor getStaticInitialiserVisitor(){
+		return staticInitialiserVisitor;
 	}
 
 	@Override

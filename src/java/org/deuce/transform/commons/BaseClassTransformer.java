@@ -18,16 +18,15 @@ import org.deuce.objectweb.asm.commons.JSRInlinerAdapter;
  * @since 1.0
  */
 public class BaseClassTransformer extends ClassAdapter {
-	@Override
-	public MethodVisitor visitMethod(int access, String name, String desc,
-			String signature, String[] exceptions) {
-		MethodVisitor mv = super.visitMethod(access, name, desc, signature, exceptions);
-		return new JSRInlinerAdapter(mv, access, name, desc, signature, exceptions);
-	}
-
 	protected final String className;
 	private int maximalversion = Integer.MAX_VALUE; // the maximal bytecode version to transform
 
+	/**
+	 * Constructor.
+	 *
+	 * @param cv
+	 * @param className
+	 */
 	public BaseClassTransformer(ClassVisitor cv, String className) {
 		super(cv);
 		this.className = className;
@@ -40,6 +39,13 @@ public class BaseClassTransformer extends ClassAdapter {
 		if(version > maximalversion) // version higher than allowed
 			throw VersionException.INSTANCE;
 		super.visit(version, access, name, signature, superName, interfaces);
+	}
+
+	@Override
+	public MethodVisitor visitMethod(int access, String name, String desc,
+			String signature, String[] exceptions) {
+		MethodVisitor mv = super.visitMethod(access, name, desc, signature, exceptions);
+		return new JSRInlinerAdapter(mv, access, name, desc, signature, exceptions);
 	}
 
 	public String getClassName() {

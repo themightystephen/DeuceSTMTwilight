@@ -57,6 +57,7 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 			final String signature, final String superName, final String[] interfaces) {
 
 		// TODO: when doing offline instrumentation, this will do some necessary visiting of its own and other preparation (see ExternalFieldsHolder class)
+		// when fieldsHolder is an ExternalFieldsHolder (i.e. offline instrumentation), causes visits of header of new class for holding fields
 		fieldsHolder.visit(superName);
 
 		// store useful information for later
@@ -153,7 +154,7 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 			fieldsHolder.addField(fieldAccess, StaticMethodTransformer.CLASS_BASE,
 					Type.getDescriptor(Object.class), null);
 
-			MethodVisitor staticMethodVisitor = fieldsHolder.getStaticMethodVisitor();
+			MethodVisitor staticMethodVisitor = fieldsHolder.getStaticInitialiserVisitor();
 			return createStaticMethodTransformer(originalMethod, staticMethodVisitor);
 		}
 		Method newMethod = createNewMethod(name, desc);
@@ -235,7 +236,7 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 
 		// call the original method
 		dupMethodWithContextArg.visitMethodInsn(isStatic ? Opcodes.INVOKESTATIC : Opcodes.INVOKEVIRTUAL, className, name, desc);
-		TypeCodeResolver returnResolver = TypeCodeResolverFactory.getReolver(newMethod.getReturnType());
+		TypeCodeResolver returnResolver = TypeCodeResolverFactory.getResolver(newMethod.getReturnType());
 		if(returnResolver == null) {
 			dupMethodWithContextArg.visitInsn(Opcodes.RETURN); // return;
 		}else {
@@ -286,7 +287,7 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 	}
 
 	@Override
-	public MethodVisitor getStaticMethodVisitor(){
+	public MethodVisitor getStaticInitialiserVisitor(){
 		return staticMethod;
 	}
 

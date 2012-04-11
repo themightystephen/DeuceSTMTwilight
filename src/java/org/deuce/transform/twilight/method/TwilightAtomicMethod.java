@@ -12,6 +12,7 @@ import org.deuce.transaction.AbortTransactionException;
 import org.deuce.transaction.Context;
 import org.deuce.transaction.ContextDelegator;
 import org.deuce.transaction.TransactionException;
+import org.deuce.transaction.TwilightContext;
 import org.deuce.transform.commons.type.TypeCodeResolver;
 import org.deuce.transform.commons.type.TypeCodeResolverFactory;
 
@@ -30,6 +31,11 @@ import static org.deuce.objectweb.asm.Opcodes.*;
  * Apart from the slight modification I've made to visitCode(), I also must take into account
  * the fact that @TwilightAtomic now has an additional name-value pair, 'name', which is used to link
  * the @TwilightConsistent and @TwilightInconsistent methods with each other.
+ *
+ *
+ * NOTES -- it looks like things like init and commit (or prepareCommit() in this case) are called
+ * directly on the Context whereas the read/write field accesses are done through the
+ * ContextDelegator.
  *
  * @author Stephen Tuttlebee
  */
@@ -64,10 +70,10 @@ public class TwilightAtomicMethod extends MethodAdapter {
 		Type returnType = Type.getReturnType(descriptor);
 		Type[] argumentTypes = Type.getArgumentTypes(descriptor);
 
-		returnResolver = TypeCodeResolverFactory.getReolver(returnType);
+		returnResolver = TypeCodeResolverFactory.getResolver(returnType);
 		argumentResolvers = new TypeCodeResolver[argumentTypes.length];
 		for(int i = 0; i < argumentTypes.length; ++i) {
-			argumentResolvers[i] = TypeCodeResolverFactory.getReolver(argumentTypes[i]);
+			argumentResolvers[i] = TypeCodeResolverFactory.getResolver(argumentTypes[i]);
 		}
 		variablesSize = variablesSize(argumentResolvers, isStatic);
 	}
@@ -169,7 +175,7 @@ public class TwilightAtomicMethod extends MethodAdapter {
 	 */
 	@Override
 	public void visitCode() {
-
+		// additional local variables required
 		final int indexIndex = variablesSize; // i
 		final int contextIndex = indexIndex + 1; // context
 		final int throwableIndex = contextIndex + 1;
@@ -184,7 +190,7 @@ public class TwilightAtomicMethod extends MethodAdapter {
 		Label l2 = new Label();
 		mv.visitTryCatchBlock(l0, l1, l2, TransactionException.TRANSACTION_EXCEPTION_INTERNAL);  // try{
 		Label l3 = new Label();
-		mv.visitTryCatchBlock(l0, l1, l3, Type.getInternalName( Throwable.class));  // try{
+		mv.visitTryCatchBlock(l0, l1, l3, Type.getInternalName(Throwable.class));  // try{
 
 		Label l4 = new Label(); // Throwable throwable = null;
 		mv.visitLabel(l4);
@@ -221,7 +227,7 @@ public class TwilightAtomicMethod extends MethodAdapter {
 		mv.visitVarInsn(ALOAD, contextIndex);
 		mv.visitLdcInsn(ATOMIC_BLOCK_COUNTER.getAndIncrement());
 		mv.visitLdcInsn(metainf);
-		mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "init", "(ILjava/lang/String;)V");
+		mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "init", "(ILjava/lang/String;)V");
 
 		/* result = foo( context, ...)  */
 		mv.visitLabel(l0);
@@ -257,7 +263,7 @@ public class TwilightAtomicMethod extends MethodAdapter {
 		mv.visitVarInsn(ASTORE, exceptionIndex);
 		Label l27 = new Label();
 		mv.visitVarInsn(ALOAD, contextIndex);
-		mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "rollback", "()V");
+		mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "rollback", "()V");
 		mv.visitLabel(l27);
 		mv.visitVarInsn(ALOAD, exceptionIndex);
 		mv.visitInsn(ATHROW);
@@ -313,7 +319,7 @@ public class TwilightAtomicMethod extends MethodAdapter {
 		Label l17 = new Label(); // if( context.commit())
 		mv.visitLabel(l17);
 		mv.visitVarInsn(ALOAD, contextIndex);
-		mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "commit", "()Z");
+		mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "prepareCommit", "()Z");
 		Label l18 = new Label();
 		mv.visitJumpInsn(IFEQ, l18);
 
@@ -344,7 +350,7 @@ public class TwilightAtomicMethod extends MethodAdapter {
 		// else
 		mv.visitLabel(l16); // context.rollback();
 		mv.visitVarInsn(ALOAD, contextIndex);
-		mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "rollback", "()V");
+		mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "rollback", "()V");
 
 		mv.visitInsn(ICONST_1); // commit = true;
 		mv.visitVarInsn(ISTORE, commitIndex);

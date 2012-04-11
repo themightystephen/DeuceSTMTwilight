@@ -26,9 +26,7 @@ import org.deuce.transaction.ContextDelegator;
 import org.deuce.transaction.TwilightContext;
 import org.deuce.transform.commons.BaseClassTransformer;
 import org.deuce.transform.commons.Exclude;
-import org.deuce.transform.commons.ClassByteCode;
 import org.deuce.transform.commons.ExcludeIncludeStore;
-import org.deuce.transform.commons.ExternalFieldsHolder;
 import org.deuce.transform.commons.FramesCodeVisitor;
 
 /**
@@ -74,12 +72,12 @@ public class Agent implements ClassFileTransformer {
 	 */
 	private List<ClassByteCode> transform(String className, byte[] classfileBuffer, boolean offline)
 	throws IllegalClassFormatException {
-		ArrayList<ClassByteCode> byteCodes = new ArrayList<ClassByteCode>(); // a single .class file can become multiple when in offline mode. Additional .class files are created to hold synthetic fields. I don't *think* this is done during online instrumentation.
+		List<ClassByteCode> classesWithBytecode = new ArrayList<ClassByteCode>(); // a single .class file can become multiple when in offline mode. Additional .class files are created to hold synthetic fields. I don't *think* this is done during online instrumentation.
 
 		// if the class name starts with a $ or it is marked as excluded, then perform no transformation; put the bytecode into the output untransformed
 		if (className.startsWith("$") || ExcludeIncludeStore.exclude(className)){
-			byteCodes.add(new ClassByteCode( className, classfileBuffer));
-			return byteCodes;
+			classesWithBytecode.add(new ClassByteCode(className, classfileBuffer));
+			return classesWithBytecode;
 		}
 
 		if (logger.isLoggable(Level.FINER))
@@ -88,17 +86,19 @@ public class Agent implements ClassFileTransformer {
 		// Reads the bytecode and calculate the frames, to support 1.5- code.
 		classfileBuffer = addFrames(className, classfileBuffer);
 
-		if(GLOBAL_TXN){
-			//ByteCodeVisitor cv = new org.deuce.transaction.global.ClassTransformer( className); // TODO: commented out this for now
-			org.deuce.transform.commons.BaseClassTransformer cv = new org.deuce.transaction.global.ClassTransformer( className); // FIXME: using ByteCodeVisitor from core package for now...
-			byte[] bytecode = cv.visit(classfileBuffer);
-
-			byteCodes.add(new ClassByteCode( className, bytecode));
+		if(GLOBAL_TXN) {
+			// start visiting the class (its bytecode); transformed class bytecode is returned
+			ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+			BaseClassTransformer cv = new org.deuce.transaction.global.ClassTransformer(className);
+			ClassReader cr = new ClassReader(classfileBuffer); // parses bytecode and generates visit events when accept() called on it
+			cr.accept(cv, ClassReader.EXPAND_FRAMES); // fire all visiting events corresponding to the bytecode structure; our transformation visitor cv handles the events
+			// store association of class name with bytecode
+			classesWithBytecode.add(new ClassByteCode(className, cw.toByteArray()));
 		}
-		else{
-			ExternalFieldsHolder fieldsHolder = null;
+		else {
+			org.deuce.transform.twilight.ExternalFieldsHolder fieldsHolder = null;
 			if(offline) {
-				fieldsHolder = new ExternalFieldsHolder(className);
+				fieldsHolder = new org.deuce.transform.twilight.ExternalFieldsHolder(className);
 			}
 
 			// if org.deuce.transaction.contextChosen property chosen is a Context which does NOT also implement TwilightContext, show error and exit
@@ -112,35 +112,34 @@ public class Agent implements ClassFileTransformer {
 
 			// start visiting the class (its bytecode); returned is the transformed class bytecode
 			ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-			TraceClassVisitor tcv; // TODO: use trace visitor to see the bytecode output on the console
+			//TraceClassVisitor tcv; // TODO: use trace visitor to see the bytecode output on the console
 			// choose class transformer visitor, either the ordinary one or twilight one. Twilight one only compatible with use of a Context that implements TwilightContext interface.
 			BaseClassTransformer cv = ENABLE_TWILIGHT ? new org.deuce.transform.twilight.ClassTransformer(cw, className, fieldsHolder)
 													  : new org.deuce.transform.core.ClassTransformer(cw, className, fieldsHolder);
-			// parses bytecode and generates visit events when accept() called on it
-			ClassReader cr = new ClassReader(classfileBuffer);
-			// fire all visiting events corresponding to the bytecode structure; our transformation visitor cv handles the events
-			cr.accept(cv, ClassReader.EXPAND_FRAMES);
-			//
-			byte[] bytecode = cw.toByteArray();
+			ClassReader cr = new ClassReader(classfileBuffer); // parses bytecode and generates visit events when accept() called on it
+			cr.accept(cv, ClassReader.EXPAND_FRAMES); // fire all visiting events corresponding to the bytecode structure; our transformation visitor cv handles the events
 
-			byteCodes.add(new ClassByteCode( className, bytecode));
+			// store association of class name with bytecode
+			classesWithBytecode.add(new ClassByteCode(className, cw.toByteArray()));
 			// NOTE: offline instrumentation means that the synthetic fields are put in a separate xxxDeuceFieldsHolder class rather than added to the original class (don't know why yet)
 			if(offline) {
 				// get bytecode for the additional generated XXXDeuceFieldsHolder class and add it to byteCodes List (remember, separate field holder class only happens in offline mode)
-				byteCodes.add(fieldsHolder.getClassByteCode());
+				classesWithBytecode.add(new ClassByteCode(fieldsHolder.getFieldsHolderName(className),fieldsHolder.getBytecode()));
 			}
+			// TODO: the interface, fieldsHolder.getFieldsHolderName(className), is horrible way of getting the name of the fields holder class, especially since we already passed in the className in the constructor above ()! Definitely need to review/rewrite the interface of FieldHolder.
+			// TODO: also need to look inside ClassTransformer and maybe have a separate (inner?) class that implements FieldsHolder instead of having the ClassTransformer itself implementing it (which design-wise, I don't like)
 		}
 
 		if(VERBOSE) {
 			try {
-				verbose(byteCodes);
+				verbose(classesWithBytecode);
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		}
-		return byteCodes;
+		return classesWithBytecode;
 	}
 
 	private Class<? extends Context> getContextClass() {
@@ -167,13 +166,17 @@ public class Agent implements ClassFileTransformer {
 	/**
 	 * Reads the bytecode and calculate the frames, to support 1.5- code.
 	 *
+	 * This method is called BEFORE the main transformation takes place, essentially to ensure
+	 * all classes being transformed are on a level playing field; they all have the necessary
+	 * frames in them.
+	 *
 	 * @param className class to manipulate
 	 * @param classfileBuffer original byte code
 	 *
 	 * @return bytecode with frames
 	 */
 	private byte[] addFrames(String className, byte[] classfileBuffer) {
-
+		// exception is thrown in the case the class is already Java 1.6 or higher, in which case, no changes are required
 		try{
 			FramesCodeVisitor frameCompute = new FramesCodeVisitor( className);
 			return frameCompute.visit( classfileBuffer); // avoid adding frames to Java6
@@ -294,5 +297,30 @@ public class Agent implements ClassFileTransformer {
 			fs.write(byteCode.getBytecode());
 			fs.close();
 		}
+	}
+
+	/**
+	 * A structure to hold a tuple of class and its bytecode.
+	 *
+	 * @author guy
+	 * @since 1.1
+	 */
+	private class ClassByteCode{
+		final private String className;
+		final private byte[] bytecode;
+
+		public ClassByteCode(String className, byte[] bytecode){
+			this.className = className;
+			this.bytecode = bytecode;
+		}
+
+		public String getClassName() {
+			return className;
+		}
+
+		public byte[] getBytecode() {
+			return bytecode;
+		}
+
 	}
 }

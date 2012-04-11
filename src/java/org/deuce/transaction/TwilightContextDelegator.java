@@ -1,6 +1,7 @@
 package org.deuce.transaction;
 
 import org.deuce.objectweb.asm.Type;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * Twilight Workflow Operations (init, prepareCommit, finalizeCommit, commit, rollback), similar to ordinary STM
@@ -18,11 +19,43 @@ import org.deuce.objectweb.asm.Type;
  */
 public class TwilightContextDelegator extends ContextDelegator {
 	//DEFAULT_TWILIGHTCONTEXT_CLASS??
-	final static public Class<? extends Context> DEFAULT_CONTEXT_CLASS = org.deuce.transaction.tl2twilight.Context.class;
+	final static public Class<? extends TwilightContext> DEFAULT_CONTEXT_CLASS = org.deuce.transaction.tl2twilight.Context.class;
 
 	//CONTEXT_DELEGATOR_INTERNAL????
 	final static public String TWILIGHTCONTEXT_DELEGATOR_INTERNAL = Type.getInternalName(TwilightContextDelegator.class);
 
 
-	// these methods ........
+	final private static ContextThreadLocal THREAD_CONTEXT = new ContextThreadLocal();
+
+	@Exclude
+	private static class ContextThreadLocal extends ThreadLocal<TwilightContext>
+	{
+		private Class<? extends TwilightContext> contextClass;
+
+		public ContextThreadLocal(){
+			String className = System.getProperty( "org.deuce.transaction.contextClass");
+			if( className != null){
+				try {
+					this.contextClass = (Class<? extends TwilightContext>) Class.forName(className); // changed!
+					return;
+				} catch (Exception e) {
+					e.printStackTrace(); // TODO add logger
+				}
+			}
+			this.contextClass = DEFAULT_CONTEXT_CLASS;
+		}
+
+		@Override
+		protected synchronized TwilightContext initialValue() {
+			try {
+				return this.contextClass.newInstance();
+			} catch (Exception e) {
+				throw new TransactionException( e);
+			}
+		}
+	}
+
+	public static TwilightContext getInstance(){
+		return THREAD_CONTEXT.get();
+	}
 }

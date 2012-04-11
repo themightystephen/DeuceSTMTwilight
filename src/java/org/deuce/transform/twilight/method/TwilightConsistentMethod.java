@@ -51,10 +51,10 @@ public class TwilightConsistentMethod extends MethodAdapter{
 		Type returnType = Type.getReturnType(descriptor);
 		Type[] argumentTypes = Type.getArgumentTypes(descriptor);
 
-		returnReolver = TypeCodeResolverFactory.getReolver(returnType);
+		returnReolver = TypeCodeResolverFactory.getResolver(returnType);
 		argumentReolvers = new TypeCodeResolver[ argumentTypes.length];
 		for( int i=0; i< argumentTypes.length ; ++i) {
-			argumentReolvers[ i] = TypeCodeResolverFactory.getReolver( argumentTypes[ i]);
+			argumentReolvers[ i] = TypeCodeResolverFactory.getResolver( argumentTypes[ i]);
 		}
 		variablesSize = variablesSize( argumentReolvers, isStatic);
 	}

@@ -10,6 +10,10 @@ import org.deuce.objectweb.asm.commons.JSRInlinerAdapter;
 
 /**
  * Adds frames to allow later {@link ClassReader#EXPAND_FRAMES}
+ *
+ * This visitor is invoked on a class's bytecode BEFORE the main transformation
+ * takes place.
+ *
  * @author Guy Korland
  * @since 1.0
  */

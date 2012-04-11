@@ -1,11 +1,12 @@
-package org.deuce.transform.commons;
+package org.deuce.transform.twilight;
 
 import org.deuce.objectweb.asm.ClassWriter;
 import org.deuce.objectweb.asm.MethodAdapter;
 import org.deuce.objectweb.asm.MethodVisitor;
 import org.deuce.objectweb.asm.Opcodes;
-import org.deuce.transform.commons.ClassByteCode;
-import org.deuce.transform.commons.ClassTransformer;
+import org.deuce.transform.twilight.ClassTransformer;
+import org.deuce.transform.commons.ExcludeIncludeStore;
+import org.deuce.transform.commons.FieldsHolder;
 
 /**
  * Creates a class to hold the fields address, used by the offline instrumentation.
@@ -25,24 +26,23 @@ public class ExternalFieldsHolder implements FieldsHolder {
 
 	final private ClassWriter classWriter;
 	final private String className;
-	private ExternalMethodVisitor staticMethod;
+	private ExternalStaticInitialiserVisitor extStaticInitVisitor;
 
 	public ExternalFieldsHolder(String className){
 		this.className = getFieldsHolderName(className);
 		this.classWriter = new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
 	}
 
+	/**
+	 * Initiates the creation of the separate class (bytecode) to hold the synthetic fields.
+	 */
 	public void visit(String superName){
 		String superFieldHolder = ExcludeIncludeStore.exclude(superName) ? "java/lang/Object" : getFieldsHolderName(superName);
 		classWriter.visit(Opcodes.V1_6, Opcodes.ACC_PUBLIC + Opcodes.ACC_SUPER,
 				this.className, null, superFieldHolder, null);
 		classWriter.visitAnnotation(ClassTransformer.EXCLUDE_DESC, false);
-		staticMethod = new ExternalMethodVisitor(classWriter.visitMethod(Opcodes.ACC_STATIC, "<clinit>", "()V", null, null));
-		staticMethod.visitCode();
-	}
-
-	public ClassByteCode getClassByteCode(){
-		return new ClassByteCode(className, classWriter.toByteArray());
+		extStaticInitVisitor = new ExternalStaticInitialiserVisitor(classWriter.visitMethod(Opcodes.ACC_STATIC, "<clinit>", "()V", null, null));
+		extStaticInitVisitor.visitCode();
 	}
 
 	@Override
@@ -53,28 +53,34 @@ public class ExternalFieldsHolder implements FieldsHolder {
 
 	@Override
 	public void close(){
-		staticMethod.visitEnd();
+		extStaticInitVisitor.visitEnd();
 		classWriter.visitEnd();
 	}
 
 	@Override
-	public MethodVisitor getStaticMethodVisitor(){
-		return staticMethod;
+	public MethodVisitor getStaticInitialiserVisitor(){
+		return extStaticInitVisitor;
 	}
 
 	@Override
 	public String getFieldsHolderName(String owner){
+		// name of original owner class concatenated with predefined 'DeuceFieldsHolder' String
 		return owner +  FIELDS_HOLDER;
+	}
+
+
+	public byte[] getBytecode(){
+		return classWriter.toByteArray();
 	}
 
 	/**
 	* A wrapper method that is used to close the new <clinit>.
 	*/
-	private static class ExternalMethodVisitor extends MethodAdapter{
+	private static class ExternalStaticInitialiserVisitor extends MethodAdapter{
 
 		private boolean ended = false;
 
-		public ExternalMethodVisitor(MethodVisitor mv) {
+		public ExternalStaticInitialiserVisitor(MethodVisitor mv) {
 			super(mv);
 		}
 

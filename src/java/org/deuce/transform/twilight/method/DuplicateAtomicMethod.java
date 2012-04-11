@@ -31,7 +31,7 @@ import static org.deuce.objectweb.asm.Opcodes.*;
  *
  * @author Guy Korland
  */
-public class DuplicateMethod extends MethodAdapter {
+public class DuplicateAtomicMethod extends MethodAdapter {
 
 	final static public String LOCAL_VARIABLE_NAME = "__transactionContext__";
 
@@ -43,7 +43,7 @@ public class DuplicateMethod extends MethodAdapter {
 	private boolean addContextToTable = false;
 	private AnalyzerAdapter analyzerAdapter;
 
-	public DuplicateMethod(MethodVisitor mv, boolean isstatic, Method newMethod, FieldsHolder fieldsHolder) {
+	public DuplicateAtomicMethod(MethodVisitor mv, boolean isstatic, Method newMethod, FieldsHolder fieldsHolder) {
 		super(mv);
 		this.fieldsHolder = fieldsHolder;
 		this.argumentsSize = Util.calcArgumentsSize( isstatic, newMethod);
@@ -121,7 +121,7 @@ public class DuplicateMethod extends MethodAdapter {
 			break;
 		case GETSTATIC: // check support for static fields
 			super.visitFieldInsn(GETSTATIC, fieldsHolderName,
-					StaticMethodTransformer.CLASS_BASE, "Ljava/lang/Object;");
+					StaticInitialiserTransformer.CLASS_BASE, "Ljava/lang/Object;");
 
 			addBeforeReadCall(fieldsHolderName, name);
 
@@ -136,7 +136,7 @@ public class DuplicateMethod extends MethodAdapter {
 			break;
 		case PUTSTATIC:
 			super.visitFieldInsn(GETSTATIC, fieldsHolderName,
-					StaticMethodTransformer.CLASS_BASE, "Ljava/lang/Object;");
+					StaticInitialiserTransformer.CLASS_BASE, "Ljava/lang/Object;");
 			super.visitFieldInsn( GETSTATIC, fieldsHolderName, Util.getAddressField(name) , "J");
 			super.visitVarInsn(ALOAD, argumentsSize - 1); // load context
 			super.visitMethodInsn( INVOKESTATIC, ContextDelegator.CONTEXT_DELEGATOR_INTERNAL,

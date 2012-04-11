@@ -10,8 +10,8 @@ import org.deuce.objectweb.asm.MethodVisitor;
 public interface FieldsHolder {
 
 	void visit(String superName);
-	MethodVisitor getStaticMethodVisitor();
-	void addField(int fieldAccess, String addressFieldName, String desc, Object value);
+	MethodVisitor getStaticInitialiserVisitor();
+	void addField(int addressFieldAccess, String addressFieldName, String desc, Object value);
 	void close();
 	String getFieldsHolderName(String owner);
 }

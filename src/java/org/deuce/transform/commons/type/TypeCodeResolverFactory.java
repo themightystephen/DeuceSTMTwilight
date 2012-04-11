@@ -32,7 +32,7 @@ public class TypeCodeResolverFactory {
 	final private static DoubleTypeCodeResolver DOUBLE_RESOLVER = 
 		new DoubleTypeCodeResolver(Type.DOUBLE_TYPE);
 
-	static public TypeCodeResolver getReolver( Type type) {
+	static public TypeCodeResolver getResolver( Type type) {
 		switch( type.getSort()) {
 		case Type.VOID:
 			return null;
