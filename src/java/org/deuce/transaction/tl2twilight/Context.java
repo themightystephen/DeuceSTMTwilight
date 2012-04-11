@@ -2,7 +2,6 @@ package org.deuce.transaction.tl2twilight;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -23,7 +22,6 @@ import org.deuce.transaction.tl2twilight.field.WriteFieldAccess;
 import org.deuce.transaction.tl2twilight.pool.Pool;
 import org.deuce.transaction.tl2twilight.pool.ResourceFactory;
 import org.deuce.transform.commons.Exclude;
-import org.deuce.trove.THashMap;
 import org.deuce.trove.THashSet;
 import org.deuce.trove.TObjectProcedure;
 
@@ -90,7 +88,7 @@ final public class Context implements org.deuce.transaction.TwilightContext {
 	/**
 	 * Read and Write sets [TL2].
 	 */
-	final private ReadSet readSet = new ReadSet();
+	private ReadSet readSet = new ReadSet();
 	final private WriteSet writeSet = new WriteSet(locksMarker);
 
 	/**
@@ -342,20 +340,32 @@ final public class Context implements org.deuce.transaction.TwilightContext {
 		// but otherwise
 		else {
 			boolean snap = false;
-			ReadSet newReadset;
 			// attempt to get consistent snapshot of read set (hence variable name 'snap'); if fail to do so, keep trying
 			while(!snap) {
-				int reloadTime = clock.get();
-				newReadset = new ReadSet();
-				snap = true;
-				readSet.forEach(new TObjectProcedure<ReadFieldAccess>() {
+				final int reloadTime = clock.get();
+				final ReadSet newReadset = new ReadSet(); // alternative is to clear the readset
+//				newReadset.clear(); // TODO: could change to be a 'quick clear' instead (but doesn't seem to exist in THashSet) (is this slower than just creating a new object each time? Looking at the code of THashSet I think it might be faster actually!)
+				snap = readSet.forEach(new TObjectProcedure<ReadFieldAccess>() { // stops looping on first false returned [I think]
 					@Override
-					public boolean execute(ReadFieldAccess object) {
-						// TODO: determine how to atomically load values a transactional variable's value, timestamp and lock from memory *atomically* (obviously the timestamp and lock are kept together so at least that part is easy to keep atomic)
+					public boolean execute(ReadFieldAccess readFieldAccess) {
+						// use pre- and post-checks to ensure we atomically load transactional variable's value and versioned-lock
+						int expected = LockManager.checkLock(readFieldAccess.hashCode(), reloadTime); // pre-check
+						newReadset.add(readFieldAccess);
+						try {
+							LockManager.checkLock(readFieldAccess.hashCode(), reloadTime, expected); // post-check
+						}
+						catch(TransactionException te) {
+							return false; // (effectively like the 'break' in the algorithm given in the thesis)
+						}
 
 						return true;
 					}
 				});
+				// NOTE: moved these assignments inside loop (rather than after, as in the thesis) due to Java issues relating to newReadset variable and its final/non-final modifier and interaction with nested execute() method
+				if(snap) {
+					state = ReadSetState.CONSISTENT;
+					readSet = newReadset;
+				}
 			}
 		}
 	}

@@ -136,8 +136,9 @@ public class LockManager {
 	/**
 	 * <p>Used for post-validation of individual reads.</p>
 	 *
-	 * <p>In contrast to pre-validation, post-validation requires us to take an additional expected state of the lock
-	 * for the field being read and compare with the actual state of the lock. If they are different then </p>
+	 * <p>In contrast to pre-validation, post-validation requires us to take an additional expected state of the
+	 * versioned-lock for the field being read and compare with the actual state of the lock. If they are
+	 * different then we throw an exception.</p>
 	 *
 	 * @param lockIndex
 	 * @param clock
@@ -152,7 +153,7 @@ public class LockManager {
 	}
 
 	/**
-	 * Called by LockProcedure.unlockProcedure
+	 * TODO: javadoc
 	 *
 	 * @param lockIndex
 	 * @param contextLocks
