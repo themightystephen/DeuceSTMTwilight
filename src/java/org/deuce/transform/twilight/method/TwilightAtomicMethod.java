@@ -130,14 +130,14 @@ public class TwilightAtomicMethod extends MethodAdapter {
 	 * Admittedly, it would be so much easier if the programmer themselves had to write prepareCommit() or an equivelent to it
 	 * and handle everything themselves all inside one @Atomic method rather than spread over three methods.
 
-	public static boolean foo(Object s) throws IOException{
+	public [static] [returnType] foo([parameters]) [throws XXXException, YYYException] {
 		Throwable throwable = null;
 		TwilightContext context = TwilightContextDelegator.getInstance();
 		boolean commit = true;
-		boolean result = true;
-		for(int i = 10 ;i > 0 ;--i)
+		[returnType] result = true;
+		for(int i = [numRetries e.g. 64] ;i > 0 ;--i)
 		{
-			context.init(atomicBlockId, metainf);
+			context.init([atomicBlockId; compute from simple counter], [metainf; optionally provided by programmer]);
 			try
 			{
 				result = foo(s,context);
@@ -151,6 +151,7 @@ public class TwilightAtomicMethod extends MethodAdapter {
 			{
 				commit = false;
 			}
+			// exists even if the original method declares it throws exceptions
 			catch( Throwable ex)
 			{
 				throwable = ex;
@@ -158,10 +159,35 @@ public class TwilightAtomicMethod extends MethodAdapter {
 
 			if(commit)
 			{
-				if(context.prepareCommit()){
-					if( throwable != null)
-						throw (IOException)throwable;
+				boolean consistent = context.prepareCommit();
+
+				// twilight zone could throw exception as well!
+				try {
+					if(consistent)
+						result = myConsistentMethod();
+					else
+						result = myInconsistentMethod();
+				}
+				catch (Throwable ex) {
+					// only set throwable if not already set (i.e. we give the transactional exception the priority since it occurred first and thus would be the first to be thrown in a normal, non-transactional situation anyway)
+					if(throwable != null) throwable = ex;
+				}
+
+				// finalizing commit is successful if repair actions have made readset consistent
+				if(context.finalizeCommit()) {
 					return result;
+				}
+					// if it was ordinary commit, and it was successful then we rethrew any application exceptions
+					// we want to delay throwing the below application exception until properly committed!
+					// also, it might be possible to exceptions to occur inside the twilight zone as well...so need to consider that.....
+
+					// exists even if the original method declares it throws exceptions
+					if( throwable != null)
+						throw throwable; // I removed the cast here because in the generated code we don't have it
+					return result;
+				}
+				else {
+
 				}
 			}
 			else

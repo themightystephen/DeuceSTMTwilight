@@ -18,6 +18,9 @@ import static org.deuce.objectweb.asm.Opcodes.*;
  * Responsible for creating the mirror version for the original
  * method that includes instrumentation.
  *
+ * This duplication should occur for ALL methods, whether annotated with TwilightAtomic
+ * or not.
+ *
  * i.e. all direct field accesses are transformed into call into Context API (via the
  * ContextDelegator class). It also deals with accesses to array elements equally
  * well too. It also changes method calls to call transactional versions of methods
@@ -31,7 +34,7 @@ import static org.deuce.objectweb.asm.Opcodes.*;
  *
  * @author Guy Korland
  */
-public class DuplicateAtomicMethod extends MethodAdapter {
+public class DuplicateMethod extends MethodAdapter {
 
 	final static public String LOCAL_VARIABLE_NAME = "__transactionContext__";
 
@@ -43,7 +46,7 @@ public class DuplicateAtomicMethod extends MethodAdapter {
 	private boolean addContextToTable = false;
 	private AnalyzerAdapter analyzerAdapter;
 
-	public DuplicateAtomicMethod(MethodVisitor mv, boolean isstatic, Method newMethod, FieldsHolder fieldsHolder) {
+	public DuplicateMethod(MethodVisitor mv, boolean isstatic, Method newMethod, FieldsHolder fieldsHolder) {
 		super(mv);
 		this.fieldsHolder = fieldsHolder;
 		this.argumentsSize = Util.calcArgumentsSize( isstatic, newMethod);

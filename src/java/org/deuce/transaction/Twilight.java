@@ -32,12 +32,28 @@ package org.deuce.transaction;
  * there is no serious problem if the user calls them. Even calling the tagging operations newTag and markField inside
  * the twilight zone has no serious problematic effect. The programmer is just wasting processor time.
  *
+ * [2012-04-12 0:33 - UPDATE: many of the comments above that involve TwilightConsistent and TwilightInconsistent
+ * annotations are not necessarily out of date. They're very much still true but obviously should be read
+ * remembering that they assume I were taking the approach of three separately annotated methods rather than
+ * one method with everything in it (transactional zone and twilight zone).]
+ *
  * @author Stephen Tuttlebee
  */
 public class Twilight {
 	// ------------------------------------------------------------------------
-	// TWILIGHT RESTART OPERATION (allowed in either zone)
+	// (SOME) TWILIGHT WORKFLOW OPERATIONS
 	// ------------------------------------------------------------------------
+	/**
+	 * <p>...</p>
+	 *
+	 * <p>This method has been added to the API the programmer can access because I made
+	 * the decision to have everything in a single method rather than spread across three
+	 * annotated methods.</p>
+	 */
+	public static boolean prepareCommit() {
+		return false; //TODO
+	}
+
 	/**
 	 * <p>Restarts the transaction.</p>
 	 *

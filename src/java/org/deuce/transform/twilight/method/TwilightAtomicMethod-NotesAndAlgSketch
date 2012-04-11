@@ -1,0 +1,92 @@
+Notes and Outline of 'transactionalised' atomic method COPIED FROM TwilightAtomicMethod
+=======================================================================================
+I am keeping a record of the notes below in case I later decide to try the approach I
+initially had in mind, which was to have three separate methods, annotated with
+@TwilightAtomic, @TwilightConsistent, and @TwilightInconsistent. The below is some
+comments/notes and a modified (twilightified) version of the original transactionalised
+algorithm seen in the existing AtomicMethod class used for standard (i.e. non-twilight)
+STM atomic method transformations.
+
+
+NOTES
+-----
+**	Twilight version ** -- changes include: change call to commit() to prepareCommit(), before returning 'result' variable,
+call the @TwilightConsistent method of same 'id' if return value of prepareCommit() is true (if it exists), otherwise call
+@TwilightInconsistent method of same 'id' (if it exists). Maybe need to determine if one or both exist first and then maybe
+just call commit() if neither exist...??? Or just carry out some default actions.. [note: don't bother creating a new method
+and calling it to achieve this, since the purpose of the extra method is just for a nice programmer interface -- the
+underlying stuff here doesn't need to do it that way, provided we call the Context API methods in the right order]???
+
+Admittedly, it would be so much easier if the programmer themselves had to write prepareCommit() or an equivelent to it
+and handle everything themselves all inside one @Atomic method rather than spread over three methods.
+
+Transactionalised @TwilightAtomic Method [not guaranteed to 100% perfect/finished but I think most of it was there]
+----------------------------------------
+public [static] [returnType] foo([parameters]) [throws XXXException, YYYException] {
+	Throwable throwable = null;
+	TwilightContext context = TwilightContextDelegator.getInstance();
+	boolean commit = true;
+	[returnType] result = true;
+	for(int i = [numRetries e.g. 64] ;i > 0 ;--i)
+	{
+		context.init([atomicBlockId; compute from simple counter], [metainf; optionally provided by programmer]);
+		try
+		{
+			result = foo(s,context);
+		}
+		catch(AbortTransactionException ex)
+		{
+			context.rollback();
+			throw ex;
+		}
+		catch(TransactionException ex)
+		{
+			commit = false;
+		}
+		// exists even if the original method declares it throws exceptions
+		catch( Throwable ex)
+		{
+			throwable = ex;
+		}
+
+		if(commit)
+		{
+			boolean consistent = context.prepareCommit();
+
+			// twilight zone could throw exception as well!
+			try {
+				if(consistent)
+					result = myConsistentMethod();
+				else
+					result = myInconsistentMethod();
+			}
+			catch (Throwable ex) {
+				// only set throwable if not already set (i.e. we give the transactional exception the priority since it occurred first and thus would be the first to be thrown in a normal, non-transactional situation anyway)
+				if(throwable != null) throwable = ex;
+			}
+
+			// finalizing commit is successful if repair actions have made readset consistent
+			if(context.finalizeCommit()) {
+				return result;
+			}
+				// if it was ordinary commit, and it was successful then we rethrew any application exceptions
+				// we want to delay throwing the below application exception until properly committed!
+				// also, it might be possible to exceptions to occur inside the twilight zone as well...so need to consider that.....
+
+				// exists even if the original method declares it throws exceptions
+				if( throwable != null)
+					throw throwable; // I removed the cast here because in the generated code we don't have it
+				return result;
+			}
+			else {
+
+			}
+		}
+		else
+		{
+			context.rollback();
+			commit = true;
+		}
+	}
+	throw new TransactionException();
+}

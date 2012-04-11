@@ -89,7 +89,7 @@ public class Agent implements ClassFileTransformer {
 		if(GLOBAL_TXN) {
 			// start visiting the class (its bytecode); transformed class bytecode is returned
 			ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-			BaseClassTransformer cv = new org.deuce.transaction.global.ClassTransformer(className);
+			BaseClassTransformer cv = new org.deuce.transaction.global.ClassTransformer(cw, className);
 			ClassReader cr = new ClassReader(classfileBuffer); // parses bytecode and generates visit events when accept() called on it
 			cr.accept(cv, ClassReader.EXPAND_FRAMES); // fire all visiting events corresponding to the bytecode structure; our transformation visitor cv handles the events
 			// store association of class name with bytecode
