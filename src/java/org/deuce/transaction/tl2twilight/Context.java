@@ -204,6 +204,7 @@ final public class Context implements org.deuce.transaction.TwilightContext {
 	 * @return <code>true</code> if the readset is consistent (or write-set is empty),
 	 * <code>false</code> otherwise
 	 */
+	@Override
 	public boolean prepareCommit() {
 		// NOTE: the optimisation below is not seen in the twilight algorithm...but then again, it's an implementation detail and so you might not expect to; for now we leave it out
 //		// optimisation for read-only transactions (no need to reserve (transactional) variables in the writeset because it's empty. Also no need to validate readset).
@@ -218,6 +219,7 @@ final public class Context implements org.deuce.transaction.TwilightContext {
 //	    }
 	}
 
+	@Override
 	public void finalizeCommit() {
 		try {
 			// if read set still inconsistent even after Twilight zone, throw TransactionException to cause transaction to restart
@@ -244,6 +246,7 @@ final public class Context implements org.deuce.transaction.TwilightContext {
 	/**
 	 * @return boolean <code>true</code> if commit was successful, <code>false</code> if unsuccessful and a restart is required
 	 */
+	@Override
 	public boolean commit() {
 		try {
 			prepareCommit();
@@ -276,6 +279,7 @@ final public class Context implements org.deuce.transaction.TwilightContext {
 	 * and any other algorithm because you can just throw a TransactionException inside an @Atomic method's body
 	 * to cause a retry/restart.</p>
 	 */
+	@Override
 	public void restart() {
 //		// NOTE: Only allow calls to restart() from within the Twilight code, otherwise it's a runtime exception (would be nice if we could statically check this)
 //		if(inTwilightZone) {
@@ -332,6 +336,7 @@ final public class Context implements org.deuce.transaction.TwilightContext {
 	/**
 	 * Reload a consistent readset.
 	 */
+	@Override
 	public void reload() {
 		// if already consistent, nothing to do
 		if(state == ReadSetState.CONSISTENT) {
@@ -374,6 +379,7 @@ final public class Context implements org.deuce.transaction.TwilightContext {
 	 *
 	 * NOTE: This is not mentioned in the Algorithm chapter but is in other chapters.
 	 */
+	@Override
 	public void ignoreUpdates() {
 		// NOTE: Only allowed calls to ignoreInconsistencies/ignoreUpdates from within Twilight Zone (would be nice if we could statically check this).
 		if(inTwilightZone) {
@@ -401,6 +407,7 @@ final public class Context implements org.deuce.transaction.TwilightContext {
 	 * @param tagID Tag identifier to be checked for consistency
 	 * @return <code>true</code> if all fields marked with the given tag are consistent, otherwise <code>false</code>
 	 */
+	@Override
 	public boolean isInconsistent(int tagID) {
 		// optimisation: if entire readset has already been found to be consistent, then obviously all fields of any given tag will be as well
 		if(state != ReadSetState.CONSISTENT) {
@@ -442,6 +449,7 @@ final public class Context implements org.deuce.transaction.TwilightContext {
 	 * @param tagID
 	 * @return
 	 */
+	@Override
 	public boolean isOnlyInconsistent(int tagID) {
 		boolean tagInconsistent = isInconsistent(tagID);
 		if(!tagInconsistent) {
@@ -471,6 +479,7 @@ final public class Context implements org.deuce.transaction.TwilightContext {
 	 *
 	 * <p>Note that tags are only valid for the extent of one transaction.</p>
 	 */
+	@Override
 	public int newTag() {
 //		tagCounter++;
 		// for efficiency, construct empty set in the Map so we don't have to check each time inside addTag() (but remember we can't assume the user will actually use the tag i.e. they might not ever call addTag())
@@ -501,6 +510,7 @@ final public class Context implements org.deuce.transaction.TwilightContext {
 //	public void markField(int tag, long field) {
 //		tagToFields.get(tag).add(field);
 //	}
+	@Override
 	public void markField(int tagID, ReadFieldAccess field) {
 		// NOTE: we assume that 'field' is in the readset. We can safely assume this if we generate the code that calls this method (i.e. instrumentation).
 		tagFields.get(tagID).add(field);
