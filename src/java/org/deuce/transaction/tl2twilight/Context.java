@@ -340,11 +340,11 @@ final public class Context implements org.deuce.transaction.TwilightContext {
 		// but otherwise
 		else {
 			boolean snap = false;
+			final ReadSet newReadset = new ReadSet();
 			// attempt to get consistent snapshot of read set (hence variable name 'snap'); if fail to do so, keep trying
 			while(!snap) {
 				final int reloadTime = clock.get();
-				final ReadSet newReadset = new ReadSet(); // alternative is to clear the readset
-//				newReadset.clear(); // TODO: could change to be a 'quick clear' instead (but doesn't seem to exist in THashSet) (is this slower than just creating a new object each time? Looking at the code of THashSet I think it might be faster actually!)
+				newReadset.clear(); // TODO: is there a 'quick clear' I could use instead (doesn't seem to exist in THashSet)? (Also, looking at the code of THashSet I think clearing is probably faster than creating a new ReadSet object)
 				snap = readSet.forEach(new TObjectProcedure<ReadFieldAccess>() { // stops looping on first false returned [I think]
 					@Override
 					public boolean execute(ReadFieldAccess readFieldAccess) {
@@ -361,12 +361,9 @@ final public class Context implements org.deuce.transaction.TwilightContext {
 						return true;
 					}
 				});
-				// NOTE: moved these assignments inside loop (rather than after, as in the thesis) due to Java issues relating to newReadset variable and its final/non-final modifier and interaction with nested execute() method
-				if(snap) {
-					state = ReadSetState.CONSISTENT;
-					readSet = newReadset;
-				}
 			}
+			state = ReadSetState.CONSISTENT;
+			readSet = newReadset;
 		}
 	}
 
