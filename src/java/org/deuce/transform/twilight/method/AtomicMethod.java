@@ -13,6 +13,8 @@ import org.deuce.transaction.Context;
 import org.deuce.transaction.ContextDelegator;
 import org.deuce.transaction.TransactionException;
 import org.deuce.transaction.TwilightContext;
+import org.deuce.transaction.TwilightContextDelegator;
+import org.deuce.transform.Agent;
 import org.deuce.transform.commons.type.TypeCodeResolver;
 import org.deuce.transform.commons.type.TypeCodeResolverFactory;
 
@@ -26,10 +28,6 @@ import static org.deuce.objectweb.asm.Opcodes.*;
  * I have / am going modify this class to appropriately instrument @Atomic methods which have the
  * twilight attribute set to true.
  *
- * RANDOM COMMENT -- it looks like things like init and commit (or prepareCommit() in this case)
- * are called directly on the Context whereas the read/write field accesses are done through the
- * ContextDelegator.
- *
  * @author Guy Korland
  * @author Stephen Tuttlebee
  */
@@ -38,17 +36,19 @@ public class AtomicMethod extends MethodAdapter {
 	final static private AtomicInteger ATOMIC_BLOCK_COUNTER = new AtomicInteger(0);
 	final static private String ATOMIC_ANNOTATION_NAME_RETRIES = "retries";
 	final static private String ATOMIC_ANNOTATION_NAME_METAINFORMATION = "metainf";
+	final static private String ATOMIC_ANNOTATION_NAME_TWILIGHT = "twilight";
 
-	// attributes of @Atomic method's annotation
+	// attributes of current @Atomic method's annotation
 	private Integer retries = Integer.getInteger("org.deuce.transaction.retries", Integer.MAX_VALUE);
 	private String metainf = "";//Integer.getInteger("org.deuce.transaction.retries", Integer.MAX_VALUE);
+	private boolean useTwilight;
 
 	final private String className;
 	final private String methodName;
 	final private TypeCodeResolver returnResolver;
 	final private TypeCodeResolver[] argumentResolvers;
 	final private boolean isStatic;
-	final private int variablesSize;
+	final private int localVariablesSize;
 	final private Method newMethod;
 
 	public AtomicMethod(MethodVisitor mv, String className, String methodName,
@@ -67,7 +67,7 @@ public class AtomicMethod extends MethodAdapter {
 		for(int i = 0; i < argumentTypes.length; ++i) {
 			argumentResolvers[i] = TypeCodeResolverFactory.getResolver(argumentTypes[i]);
 		}
-		variablesSize = variablesSize(argumentResolvers, isStatic);
+		localVariablesSize = localVariablesSize(argumentResolvers, isStatic);
 	}
 
 
@@ -84,6 +84,15 @@ public class AtomicMethod extends MethodAdapter {
 					// meta information
 					if(name.equals(ATOMIC_ANNOTATION_NAME_METAINFORMATION))
 						AtomicMethod.this.metainf = (String)value;
+					// twilight attribute set
+					if(name.equals(ATOMIC_ANNOTATION_NAME_TWILIGHT)) {
+						// and context does support twilight zones, ok
+						if(Agent.CONTEXT_SUPPORTS_TWILIGHT)
+							AtomicMethod.this.useTwilight = (Boolean)value;
+						// and context *doesn't* support twilight zones, error
+						else
+							throw new RuntimeException("@Atomic method "+className+"."+methodName+" twilight attribute set but selected context "+Agent.CONTEXT_CHOSEN.getName()+" does not support Twilight operations.");
+					}
 
 					av.visit(name, value);
 				}
@@ -109,38 +118,38 @@ public class AtomicMethod extends MethodAdapter {
 	}
 
 	/**
-	public static boolean foo(Object s) throws IOException{
-
+	*Standard Version*
+	public [static] [returnType] foo([parameters]) [throws XXXException,YYYException] {
 		Throwable throwable = null;
 		Context context = ContextDelegator.getInstance();
 		boolean commit = true;
-		boolean result = true;
+		[returnType] result = true;
 		for( int i=10 ; i>0 ; --i)
 		{
 			context.init(atomicBlockId, metainf);
 			try
 			{
-				result = foo(s,context);
+				result = foo([parameters],context);
 			}
-			catch( AbortTransactionException ex)
+			catch(AbortTransactionException ex)
 			{
 				context.rollback();
 				throw ex;
 			}
-			catch( TransactionException ex)
+			catch(TransactionException ex)
 			{
 				commit = false;
 			}
-			catch( Throwable ex)
+			catch(Throwable ex)
 			{
 				throwable = ex;
 			}
 
-			if( commit )
+			if(commit)
 			{
-				if( context.commit()){
-					if( throwable != null)
-						throw (IOException)throwable;
+				if(context.commit()){
+					if(throwable != null)
+						throw throwable;
 					return result;
 				}
 			}
@@ -151,13 +160,61 @@ public class AtomicMethod extends MethodAdapter {
 			}
 		}
 		throw new TransactionException();
-
 	}
+
+
+	*Twilight Version* (used if twilight attribute set to true) --- TODO
+	public [static] [returnType] foo([parameters]) [throws XXXException,YYYException] {
+		Throwable throwable = null;
+		Context context = ContextDelegator.getInstance();
+		boolean commit = true;
+		[returnType] result = true;
+		for(int i = 10; i > 0; --i)
+		{
+			context.init(atomicBlockId, metainf);
+			try
+			{
+				result = foo([parameters],context); // inside this method are calls to Twilight API (including prepareCommit())
+			}
+			catch(AbortTransactionException ex)
+			{
+				context.rollback();
+				throw ex;
+			}
+			catch(TransactionException ex)
+			{
+				commit = false;
+			}
+			catch(Throwable ex)
+			{
+				throwable = ex;
+			}
+
+			if(commit)
+			{
+				if(context.finalizeCommit()) {
+					if(throwable != null)
+						throw throwable;
+					return result;
+				}
+			}
+			else
+			{
+				context.rollback();
+				commit = true;
+			}
+		}
+		throw new TransactionException();
+	}
+	 */
+	/**
+	 * Calls to init and commit (or finalizeCommit()) are called directly on the Context whereas the
+	 * read/write field accesses are done through the ContextDelegator.
 	 */
 	@Override
 	public void visitCode() {
 		// additional local variables required
-		final int indexIndex = variablesSize; // i
+		final int indexIndex = localVariablesSize; // i
 		final int contextIndex = indexIndex + 1; // context
 		final int throwableIndex = contextIndex + 1;
 		final int commitIndex = throwableIndex + 1;
@@ -208,7 +265,10 @@ public class AtomicMethod extends MethodAdapter {
 		mv.visitVarInsn(ALOAD, contextIndex);
 		mv.visitLdcInsn(ATOMIC_BLOCK_COUNTER.getAndIncrement());
 		mv.visitLdcInsn(metainf);
-		mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "init", "(ILjava/lang/String;)V");
+		if(Agent.CONTEXT_SUPPORTS_TWILIGHT)
+			mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "init", "(ILjava/lang/String;)V");
+		else
+			mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "init", "(ILjava/lang/String;)V");
 
 		/* result = foo( context, ...)  */
 		mv.visitLabel(l0);
@@ -244,7 +304,10 @@ public class AtomicMethod extends MethodAdapter {
 		mv.visitVarInsn(ASTORE, exceptionIndex);
 		Label l27 = new Label();
 		mv.visitVarInsn(ALOAD, contextIndex);
-		mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "rollback", "()V");
+		if(Agent.CONTEXT_SUPPORTS_TWILIGHT)
+			mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "rollback", "()V");
+		else
+			mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "rollback", "()V");
 		mv.visitLabel(l27);
 		mv.visitVarInsn(ALOAD, exceptionIndex);
 		mv.visitInsn(ATHROW);
@@ -300,7 +363,16 @@ public class AtomicMethod extends MethodAdapter {
 		Label l17 = new Label(); // if( context.commit())
 		mv.visitLabel(l17);
 		mv.visitVarInsn(ALOAD, contextIndex);
-		mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "prepareCommit", "()Z");
+		// if programmer has specified to use twilight for this method, call finalizeCommit() otherwise user is either using twilight STM without twilight zone, or their using a non-twilight STM
+		if(Agent.CONTEXT_SUPPORTS_TWILIGHT) {
+			if(useTwilight)
+				mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "finalizeCommit", "()Z");
+			else
+				mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "commit", "()Z");
+		}
+		else {
+			mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "commit", "()Z");
+		}
 		Label l18 = new Label();
 		mv.visitJumpInsn(IFEQ, l18);
 
@@ -331,7 +403,11 @@ public class AtomicMethod extends MethodAdapter {
 		// else
 		mv.visitLabel(l16); // context.rollback();
 		mv.visitVarInsn(ALOAD, contextIndex);
-		mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "rollback", "()V");
+		// TODO: for all the methods that are already in the Context interface, I actually don't need to have this if..else; could just call Context.rollback() because rollback is in Context interface
+		if(Agent.CONTEXT_SUPPORTS_TWILIGHT)
+			mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "rollback", "()V");
+		else
+			mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "rollback", "()V");
 
 		mv.visitInsn(ICONST_1); // commit = true;
 		mv.visitVarInsn(ISTORE, commitIndex);
@@ -349,7 +425,10 @@ public class AtomicMethod extends MethodAdapter {
 		Label l24 = new Label();
 		mv.visitLabel(l24);
 		mv.visitLocalVariable("throwable", "Ljava/lang/Throwable;", null, l5, l24, throwableIndex);
-		mv.visitLocalVariable("context", Context.CONTEXT_DESC, null, l6, l24, contextIndex);
+		if(Agent.CONTEXT_SUPPORTS_TWILIGHT)
+			mv.visitLocalVariable("context", Context.CONTEXT_DESC, null, l6, l24, contextIndex);
+		else
+			mv.visitLocalVariable("context", TwilightContext.TWILIGHTCONTEXT_DESC, null, l6, l24, contextIndex);
 		mv.visitLocalVariable("commit", "Z", null, l7, l24, commitIndex);
 		if( returnResolver != null)
 			mv.visitLocalVariable("result", returnResolver.toString(), null, l8, l24, resultIndex);
@@ -358,14 +437,24 @@ public class AtomicMethod extends MethodAdapter {
 		mv.visitLocalVariable("ex", "Lorg/deuce/transaction/TransactionException;", null, l13, l14, exceptionIndex);
 		mv.visitLocalVariable("ex", "Ljava/lang/Throwable;", null, l15, l12, exceptionIndex);
 
-		mv.visitMaxs(6 + variablesSize, resultIndex + 2);
+		mv.visitMaxs(6 + localVariablesSize, resultIndex + 2);
 		mv.visitEnd();
 	}
 
+	/**
+	 * Visits the instructions required to store the Context as a local variable.
+	 *
+	 *
+	 * @param contextIndex
+	 * @return
+	 */
 	private Label getContext(final int contextIndex) {
 		Label label = new Label();
 		mv.visitLabel(label); // Context context = ContextDelegator.getInstance();
-		mv.visitMethodInsn(INVOKESTATIC, ContextDelegator.CONTEXT_DELEGATOR_INTERNAL, "getInstance", "()Lorg/deuce/transaction/Context;");
+		if(Agent.CONTEXT_SUPPORTS_TWILIGHT)
+			mv.visitMethodInsn(INVOKESTATIC, TwilightContextDelegator.TWILIGHTCONTEXT_DELEGATOR_INTERNAL, "getInstance", "()Lorg/deuce/transaction/TwilightContext;");
+		else
+			mv.visitMethodInsn(INVOKESTATIC, ContextDelegator.CONTEXT_DELEGATOR_INTERNAL, "getInstance", "()Lorg/deuce/transaction/Context;");
 		mv.visitVarInsn(ASTORE, contextIndex);
 		return label;
 	}
@@ -463,7 +552,7 @@ public class AtomicMethod extends MethodAdapter {
 		this.retries = retries;
 	}
 
-	private int variablesSize( TypeCodeResolver[] types, boolean isStatic) {
+	private int localVariablesSize( TypeCodeResolver[] types, boolean isStatic) {
 		int i = isStatic ? 0 : 1;
 		for( TypeCodeResolver type : types) {
 			i += type.localSize();

@@ -8,6 +8,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.deuce.transaction.AbortTransactionException;
 import org.deuce.transaction.TransactionException;
+import org.deuce.transaction.TwilightContext;
 import org.deuce.transaction.tl2twilight.field.BooleanWriteFieldAccess;
 import org.deuce.transaction.tl2twilight.field.ByteWriteFieldAccess;
 import org.deuce.transaction.tl2twilight.field.CharWriteFieldAccess;
@@ -67,7 +68,7 @@ import org.deuce.trove.TObjectProcedure;
  * @since	1.0
  */
 @Exclude
-final public class Context implements org.deuce.transaction.TwilightContext {
+final public class Context implements TwilightContext {
 	// SHARED/GLOBAL FIELDS (note that they are static)
 	/**
 	 * Twilight STM has a global counter/timer/clock, just as TL2 does [TL2].
@@ -220,15 +221,17 @@ final public class Context implements org.deuce.transaction.TwilightContext {
 	}
 
 	@Override
-	public void finalizeCommit() {
+	public boolean finalizeCommit() {
 		try {
 			// if read set still inconsistent even after Twilight zone, throw TransactionException to cause transaction to restart
 			if(state != ReadSetState.CONSISTENT) {
-				throw new TransactionException("Unresolved readset inconsistencies on finalization of commit.");
+				return false;
+				//throw new TransactionException("Unresolved readset inconsistencies on finalization of commit.");
 			}
 			// otherwise, read set was consistent and we can publish write set (performing necessary locking and unlocking to do so)
 			writeSet.lock();
 			writeSet.publishAndUnlock();
+			return true;
 		}
 		// clean-up code to set irrevocable state appropriately and also release appropriate locks (this is always run before returning)
 		// TODO: consider whether it makes any sense to have an irrevocable state. I suppose we would like to remain compatible with existing application code that uses it.

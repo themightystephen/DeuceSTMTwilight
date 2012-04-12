@@ -63,7 +63,7 @@ public interface TwilightContext extends org.deuce.transaction.Context {
 
 	// Twilight Workflow Operations
 	boolean prepareCommit();
-	void finalizeCommit();
+	boolean finalizeCommit();
 	void restart(); // TODO: should this not be in the plain vanilla Context API anyway...??
 	// restart is definitely allowed in the twilight zone (see p28 of Bienuisa's thesis); don't know yet if allowed in main body of Tx
 
