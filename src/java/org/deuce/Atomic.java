@@ -9,6 +9,7 @@ import java.lang.annotation.Target;
 /**
  *
  * @author Guy Korland
+ * @author Stephen Tuttlebee
  * @since 1.0
  */
 @Target(METHOD)
@@ -16,4 +17,5 @@ import java.lang.annotation.Target;
 public @interface Atomic {
 	int retries() default Integer.MAX_VALUE;
 	String metainf() default "";
+	boolean twilight() default false;
 }

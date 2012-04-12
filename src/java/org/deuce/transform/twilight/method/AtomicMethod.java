@@ -2,7 +2,6 @@ package org.deuce.transform.twilight.method;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.deuce.Atomic;
 import org.deuce.objectweb.asm.AnnotationVisitor;
 import org.deuce.objectweb.asm.Label;
 import org.deuce.objectweb.asm.MethodAdapter;
@@ -13,34 +12,46 @@ import org.deuce.transaction.AbortTransactionException;
 import org.deuce.transaction.Context;
 import org.deuce.transaction.ContextDelegator;
 import org.deuce.transaction.TransactionException;
+import org.deuce.transaction.TwilightContext;
 import org.deuce.transform.commons.type.TypeCodeResolver;
 import org.deuce.transform.commons.type.TypeCodeResolverFactory;
+
 import static org.deuce.objectweb.asm.Opcodes.*;
 
 /**
- * Used to replaced the original @atomic method with a method that run the transaction loop.
+ * Used to replaced the original @Atomic method with a method that run the transaction loop.
  * On each round the transaction contest reinitialized and the duplicated method is called with the
  * transaction context.
  *
+ * I have / am going modify this class to appropriately instrument @Atomic methods which have the
+ * twilight attribute set to true.
+ *
+ * RANDOM COMMENT -- it looks like things like init and commit (or prepareCommit() in this case)
+ * are called directly on the Context whereas the read/write field accesses are done through the
+ * ContextDelegator.
+ *
  * @author Guy Korland
+ * @author Stephen Tuttlebee
  */
-public class TwilightConsistentMethod extends MethodAdapter{
+public class AtomicMethod extends MethodAdapter {
 
-	final static public String ATOMIC_DESCRIPTOR = Type.getDescriptor(Atomic.class);
 	final static private AtomicInteger ATOMIC_BLOCK_COUNTER = new AtomicInteger(0);
+	final static private String ATOMIC_ANNOTATION_NAME_RETRIES = "retries";
+	final static private String ATOMIC_ANNOTATION_NAME_METAINFORMATION = "metainf";
 
+	// attributes of @Atomic method's annotation
 	private Integer retries = Integer.getInteger("org.deuce.transaction.retries", Integer.MAX_VALUE);
 	private String metainf = "";//Integer.getInteger("org.deuce.transaction.retries", Integer.MAX_VALUE);
 
 	final private String className;
 	final private String methodName;
-	final private TypeCodeResolver returnReolver;
-	final private TypeCodeResolver[] argumentReolvers;
+	final private TypeCodeResolver returnResolver;
+	final private TypeCodeResolver[] argumentResolvers;
 	final private boolean isStatic;
 	final private int variablesSize;
 	final private Method newMethod;
 
-	public TwilightConsistentMethod(MethodVisitor mv, String className, String methodName,
+	public AtomicMethod(MethodVisitor mv, String className, String methodName,
 			String descriptor, Method newMethod, boolean isStatic) {
 		super(mv);
 		this.className = className;
@@ -51,44 +62,50 @@ public class TwilightConsistentMethod extends MethodAdapter{
 		Type returnType = Type.getReturnType(descriptor);
 		Type[] argumentTypes = Type.getArgumentTypes(descriptor);
 
-		returnReolver = TypeCodeResolverFactory.getResolver(returnType);
-		argumentReolvers = new TypeCodeResolver[ argumentTypes.length];
-		for( int i=0; i< argumentTypes.length ; ++i) {
-			argumentReolvers[ i] = TypeCodeResolverFactory.getResolver( argumentTypes[ i]);
+		returnResolver = TypeCodeResolverFactory.getResolver(returnType);
+		argumentResolvers = new TypeCodeResolver[argumentTypes.length];
+		for(int i = 0; i < argumentTypes.length; ++i) {
+			argumentResolvers[i] = TypeCodeResolverFactory.getResolver(argumentTypes[i]);
 		}
-		variablesSize = variablesSize( argumentReolvers, isStatic);
+		variablesSize = variablesSize(argumentResolvers, isStatic);
 	}
 
 
 	@Override
 	public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
-		final AnnotationVisitor visitAnnotation = super.visitAnnotation(desc, visible);
-		if( TwilightAtomicMethod.ATOMIC_DESCRIPTOR.equals(desc)){
-			return new AnnotationVisitor(){
+		final AnnotationVisitor av = super.visitAnnotation(desc, visible);
+
+		if(MethodTransformer.ATOMIC_DESCRIPTOR.equals(desc)) {
+			return new AnnotationVisitor() {
 				public void visit(String name, Object value) {
-					if( name.equals("retries"))
-						TwilightConsistentMethod.this.retries = (Integer)value;
+					// retries
+					if(name.equals(ATOMIC_ANNOTATION_NAME_RETRIES))
+						AtomicMethod.this.retries = (Integer)value;
+					// meta information
+					if(name.equals(ATOMIC_ANNOTATION_NAME_METAINFORMATION))
+						AtomicMethod.this.metainf = (String)value;
 
-					if( name.equals("metainf"))
-						TwilightConsistentMethod.this.metainf = (String)value;
-
-					visitAnnotation.visit(name, value);
+					av.visit(name, value);
 				}
+
 				public AnnotationVisitor visitAnnotation(String name, String desc) {
-					return visitAnnotation.visitAnnotation(name, desc);
+					return av.visitAnnotation(name, desc);
 				}
+
 				public AnnotationVisitor visitArray(String name) {
-					return visitAnnotation.visitArray(name);
+					return av.visitArray(name);
 				}
+
 				public void visitEnd() {
-					visitAnnotation.visitEnd();
+					av.visitEnd();
 				}
+
 				public void visitEnum(String name, String desc, String value) {
-					visitAnnotation.visitEnum(name, desc, value);
+					av.visitEnum(name, desc, value);
 				}
 			};
 		}
-		return visitAnnotation;
+		return av;
 	}
 
 	/**
@@ -139,7 +156,7 @@ public class TwilightConsistentMethod extends MethodAdapter{
 	 */
 	@Override
 	public void visitCode() {
-
+		// additional local variables required
 		final int indexIndex = variablesSize; // i
 		final int contextIndex = indexIndex + 1; // context
 		final int throwableIndex = contextIndex + 1;
@@ -154,7 +171,7 @@ public class TwilightConsistentMethod extends MethodAdapter{
 		Label l2 = new Label();
 		mv.visitTryCatchBlock(l0, l1, l2, TransactionException.TRANSACTION_EXCEPTION_INTERNAL);  // try{
 		Label l3 = new Label();
-		mv.visitTryCatchBlock(l0, l1, l3, Type.getInternalName( Throwable.class));  // try{
+		mv.visitTryCatchBlock(l0, l1, l3, Type.getInternalName(Throwable.class));  // try{
 
 		Label l4 = new Label(); // Throwable throwable = null;
 		mv.visitLabel(l4);
@@ -170,10 +187,10 @@ public class TwilightConsistentMethod extends MethodAdapter{
 
 		Label l7 = new Label(); // ... result = null;
 		mv.visitLabel(l7);
-		if( returnReolver != null)
+		if( returnResolver != null)
 		{
-			mv.visitInsn( returnReolver.nullValueCode());
-			mv.visitVarInsn( returnReolver.storeCode(), resultIndex);
+			mv.visitInsn( returnResolver.nullValueCode());
+			mv.visitVarInsn( returnResolver.storeCode(), resultIndex);
 		}
 
 		Label l8 = new Label(); // for( int i=10 ; ... ; ...)
@@ -191,7 +208,7 @@ public class TwilightConsistentMethod extends MethodAdapter{
 		mv.visitVarInsn(ALOAD, contextIndex);
 		mv.visitLdcInsn(ATOMIC_BLOCK_COUNTER.getAndIncrement());
 		mv.visitLdcInsn(metainf);
-		mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "init", "(ILjava/lang/String;)V");
+		mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "init", "(ILjava/lang/String;)V");
 
 		/* result = foo( context, ...)  */
 		mv.visitLabel(l0);
@@ -200,9 +217,9 @@ public class TwilightConsistentMethod extends MethodAdapter{
 
 		// load the rest of the arguments
 		int local = isStatic ? 0 : 1;
-		for( int i=0 ; i < argumentReolvers.length ; ++i) {
-			mv.visitVarInsn(argumentReolvers[i].loadCode(), local);
-			local += argumentReolvers[i].localSize(); // move to the next argument
+		for( int i=0 ; i < argumentResolvers.length ; ++i) {
+			mv.visitVarInsn(argumentResolvers[i].loadCode(), local);
+			local += argumentResolvers[i].localSize(); // move to the next argument
 		}
 
 		mv.visitVarInsn(ALOAD, contextIndex); // load the context
@@ -212,8 +229,8 @@ public class TwilightConsistentMethod extends MethodAdapter{
 		else
 			mv.visitMethodInsn(INVOKEVIRTUAL, className, methodName, newMethod.getDescriptor()); // ... = foo( ...
 
-		if( returnReolver != null)
-			mv.visitVarInsn(returnReolver.storeCode(), resultIndex); // result = ...
+		if( returnResolver != null)
+			mv.visitVarInsn(returnResolver.storeCode(), resultIndex); // result = ...
 
 		mv.visitLabel(l1);
 		Label l12 = new Label();
@@ -227,7 +244,7 @@ public class TwilightConsistentMethod extends MethodAdapter{
 		mv.visitVarInsn(ASTORE, exceptionIndex);
 		Label l27 = new Label();
 		mv.visitVarInsn(ALOAD, contextIndex);
-		mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "rollback", "()V");
+		mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "rollback", "()V");
 		mv.visitLabel(l27);
 		mv.visitVarInsn(ALOAD, exceptionIndex);
 		mv.visitInsn(ATHROW);
@@ -283,7 +300,7 @@ public class TwilightConsistentMethod extends MethodAdapter{
 		Label l17 = new Label(); // if( context.commit())
 		mv.visitLabel(l17);
 		mv.visitVarInsn(ALOAD, contextIndex);
-		mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "commit", "()Z");
+		mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "prepareCommit", "()Z");
 		Label l18 = new Label();
 		mv.visitJumpInsn(IFEQ, l18);
 
@@ -301,12 +318,12 @@ public class TwilightConsistentMethod extends MethodAdapter{
 
 		// return
 		mv.visitLabel(l20);
-		if( returnReolver == null) {
+		if( returnResolver == null) {
 			mv.visitInsn( RETURN); // return;
 		}
 		else {
-			mv.visitVarInsn(returnReolver.loadCode(), resultIndex); // return result;
-			mv.visitInsn(returnReolver.returnCode());
+			mv.visitVarInsn(returnResolver.loadCode(), resultIndex); // return result;
+			mv.visitInsn(returnResolver.returnCode());
 		}
 
 		mv.visitJumpInsn(GOTO, l18);
@@ -314,7 +331,7 @@ public class TwilightConsistentMethod extends MethodAdapter{
 		// else
 		mv.visitLabel(l16); // context.rollback();
 		mv.visitVarInsn(ALOAD, contextIndex);
-		mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "rollback", "()V");
+		mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "rollback", "()V");
 
 		mv.visitInsn(ICONST_1); // commit = true;
 		mv.visitVarInsn(ISTORE, commitIndex);
@@ -334,8 +351,8 @@ public class TwilightConsistentMethod extends MethodAdapter{
 		mv.visitLocalVariable("throwable", "Ljava/lang/Throwable;", null, l5, l24, throwableIndex);
 		mv.visitLocalVariable("context", Context.CONTEXT_DESC, null, l6, l24, contextIndex);
 		mv.visitLocalVariable("commit", "Z", null, l7, l24, commitIndex);
-		if( returnReolver != null)
-			mv.visitLocalVariable("result", returnReolver.toString(), null, l8, l24, resultIndex);
+		if( returnResolver != null)
+			mv.visitLocalVariable("result", returnResolver.toString(), null, l8, l24, resultIndex);
 		mv.visitLocalVariable("i", "I", null, l9, l23, indexIndex);
 		mv.visitLocalVariable("ex", "Lorg/deuce/transaction/AbortTransactionException;", null, l27, l28, exceptionIndex);
 		mv.visitLocalVariable("ex", "Lorg/deuce/transaction/TransactionException;", null, l13, l14, exceptionIndex);

@@ -2,10 +2,8 @@ package org.deuce.transform.twilight.method;
 
 import java.util.HashMap;
 
+import org.deuce.Atomic;
 import org.deuce.Irrevocable;
-import org.deuce.TwilightAtomic;
-import org.deuce.TwilightConsistent;
-import org.deuce.TwilightInconsistent;
 import org.deuce.Unsafe;
 import org.deuce.objectweb.asm.AnnotationVisitor;
 import org.deuce.objectweb.asm.Attribute;
@@ -22,25 +20,22 @@ import org.deuce.transform.commons.util.Util;
 import static org.deuce.objectweb.asm.Opcodes.*;
 
 /**
- * Transforms the methods of a class appropriately. For example, methods marked as @TwilightAtomic
+ * Transforms the methods of a class appropriately. For example, methods marked as @Atomic
  * are instrumented to initialise and commit a transaction, with a retry loop with a call to a synthetic
  * method of the original method inside it. As mentioned there, there is also a synthetic method
  * generated from the original. This synthetic method is a 'transactionalised' version of the original
  * where all field accesses are replaced with appropriate calls into the STM API (Context) so that the
  * field accesses are transactional.
  *
- * Methods not marked as @TwilightAtomic still have an 'transactionalised' version made for them as well
+ * Methods not marked as @Atomic still have an 'transactionalised' version made for them as well
  * which are called when the original method needs to be called from within a transaction.
  *
- * TODO: Finally, methods marked with @TwilightConsistent and @TwilightInconsistent....
- *
  * @author Guy Korland
+ * @author Stephen Tuttlebee
  */
 public class MethodTransformer implements MethodVisitor {
 
-	final static public String TWILIGHTATOMIC_DESCRIPTOR = Type.getDescriptor(TwilightAtomic.class);
-	final static public String TWILIGHTCONSISTENT_DESCRIPTOR = Type.getDescriptor(TwilightConsistent.class); // TODO: determine if public or private is best
-	final static public String TWILIGHTINCONSISTENT_DESCRIPTOR = Type.getDescriptor(TwilightInconsistent.class); // TODO: determine if public or private is best
+	final static public String ATOMIC_DESCRIPTOR = Type.getDescriptor(Atomic.class);
 	final static private String UNSAFE_DESCRIPTOR = Type.getDescriptor(Unsafe.class);
 	final static private String IRREVOCABLE_DESCRIPTOR = Type.getDescriptor(Irrevocable.class);
 
@@ -85,11 +80,10 @@ public class MethodTransformer implements MethodVisitor {
 	@Override
 	public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
 		// if marked as @Atomic, add additional visitor to chain which generates transactional version of original method
-		// FIXME we might saw other annotations before and we need to put it on the new AtomicMethod
 		// need to create an atomic method from the original method
 		// [I think] second condition necessary to ensure we do not atomicize more than once when programmer places multiple @Atomic annotations on the same method
-		if(TWILIGHTATOMIC_DESCRIPTOR.equals(desc) && !(originalMethod instanceof TwilightAtomicMethod))
-			originalMethod = new TwilightAtomicMethod(originalMethod, className, methodName, descriptor, newMethod, isStatic);
+		if(ATOMIC_DESCRIPTOR.equals(desc) && !(originalMethod instanceof AtomicMethod))
+			originalMethod = new AtomicMethod(originalMethod, className, methodName, descriptor, newMethod, isStatic);
 
 		// if marked as @Unsafe, just duplicate the method as is
 		if(UNSAFE_DESCRIPTOR.equals(desc))

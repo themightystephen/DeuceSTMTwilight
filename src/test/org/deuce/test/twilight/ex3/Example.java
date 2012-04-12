@@ -1,8 +1,8 @@
 package org.deuce.test.twilight.ex3;
 
-import org.deuce.TwilightAtomic;
-import org.deuce.TwilightConsistent;
-import org.deuce.TwilightInconsistent;
+import org.deuce.test.twilight.ex2.TwilightAtomic;
+import org.deuce.test.twilight.ex2.TwilightConsistent;
+import org.deuce.test.twilight.ex2.TwilightInconsistent;
 import org.deuce.transaction.Twilight;
 
 /**

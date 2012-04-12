@@ -1,4 +1,4 @@
-package org.deuce;
+package org.deuce.test.twilight.ex2;
 
 import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.RetentionPolicy.CLASS;

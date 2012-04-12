@@ -3,9 +3,6 @@ package org.deuce.test.twilight.ex2;
 import java.io.IOException;
 import java.util.Random;
 
-import org.deuce.TwilightAtomic;
-import org.deuce.TwilightConsistent;
-import org.deuce.TwilightInconsistent;
 
 /**
  * NOTE: This project (TestDeuceTL2Twilight) assumes the correctness of the Twilight-TL2 implementation
