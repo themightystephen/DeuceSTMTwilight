@@ -138,7 +138,7 @@ public class LockManager {
 	 *
 	 * <p>In contrast to pre-validation, post-validation requires us to take an additional expected state of the
 	 * versioned-lock for the field being read and compare with the actual state of the lock. If they are
-	 * different then we throw an exception.</p>
+	 * different then we throw an exception which will cause the transaction to restart.</p>
 	 *
 	 * @param lockIndex
 	 * @param clock

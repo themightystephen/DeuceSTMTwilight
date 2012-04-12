@@ -191,9 +191,9 @@ public class Agent implements ClassFileTransformer {
 				classesWithBytecode.add(new ClassByteCode(className, cw.toByteArray()));
 			}
 			else {
-				org.deuce.transform.twilight.ExternalFieldsHolder fieldsHolder = null;
+				org.deuce.transform.twilight.ExternalFieldsHolderClass fieldsHolder = null;
 				if(offline) {
-					fieldsHolder = new org.deuce.transform.twilight.ExternalFieldsHolder(className);
+					fieldsHolder = new org.deuce.transform.twilight.ExternalFieldsHolderClass(className);
 				}
 
 				// OLD: keep around for time being

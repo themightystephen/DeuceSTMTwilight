@@ -86,7 +86,7 @@ public class DuplicateMethod extends MethodAdapter {
 			return;
 		}
 
-		String fieldsHolderName = fieldsHolder.getFieldsHolderName(owner);
+		String fieldsHolderName = fieldsHolder.getFieldsHolderName();
 		mv.visitFieldInsn(GETSTATIC, fieldsHolderName, Util.getAddressField(name), "J");
 		Label l1 = new Label();
 		mv.visitInsn(LCONST_0);

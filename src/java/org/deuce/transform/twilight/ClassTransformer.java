@@ -124,7 +124,7 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 		// define synthetic "address" field as constant (i.e. static final)
 		String addressFieldName = Util.getAddressField(name);
 		int addressFieldAccess= Opcodes.ACC_FINAL | Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC;
-		Object addressFieldValue;
+		Object addressFieldValue; // if the (original) field is non-final, the value will be given in the class/static initialiser
 
 		final boolean isFinal = (access & Opcodes.ACC_FINAL) != 0;
 		final boolean isStatic = (access & Opcodes.ACC_STATIC) != 0;
@@ -175,11 +175,11 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 
 			// existence of a class initialiser means we should add a __CLASS_BASE__ field to the class holding the synthetic fields [apparently...]
 			int addressFieldAccess = Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC; // *not* final to workaround JVM crash
-			fieldsHolder.addField(addressFieldAccess, StaticInitialiserTransformer.CLASS_BASE, Type.getDescriptor(Object.class), null);
+			fieldsHolder.addField(addressFieldAccess, StaticInitialiserTransformer.CLASS_BASE, Type.getDescriptor(Object.class), null); // no value stored for __CLASS_BASE__ (hence why we make it non-final)
 
 			MethodVisitor staticInitialiserVisitor = fieldsHolder.getStaticInitialiserVisitor();
 			return new StaticInitialiserTransformer( originalMethodVisitor, staticInitialiserVisitor, syntheticAddressFields, staticField,
-					className, fieldsHolder.getFieldsHolderName(className));
+					className, fieldsHolder.getFieldsHolderName());
 		}
 		Method newMethod = createNewMethod(name, desc);
 
@@ -297,8 +297,8 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 	 * ****************************************/
 
 	@Override
-	public void addField(int fieldAccess, String addressFieldName, String desc, Object value){
-		super.visitField( fieldAccess, addressFieldName, desc, null, value);
+	public void addField(int syntheticFieldAccess, String syntheticFieldName, String desc, Object value){
+		super.visitField( syntheticFieldAccess, syntheticFieldName, desc, null, value);
 	}
 
 	@Override
@@ -311,8 +311,8 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 	}
 
 	@Override
-	public String getFieldsHolderName(String owner){
-		return owner;
+	public String getFieldsHolderName(){
+		return className;
 	}
 
 	@Override

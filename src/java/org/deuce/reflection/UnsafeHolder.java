@@ -14,6 +14,7 @@ public class UnsafeHolder {
 	final private static Logger logger = Logger.getLogger("org.deuce.reflection");
 
 	final private static Unsafe unsafe;
+	// see: http://robaustin.wikidot.com/how-to-write-to-direct-memory-locations-in-java
 	static{
 		Unsafe unsafeValue = null;
 		try{

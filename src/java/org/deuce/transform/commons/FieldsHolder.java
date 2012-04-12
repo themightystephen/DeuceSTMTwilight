@@ -11,7 +11,7 @@ public interface FieldsHolder {
 
 	void visit(String superName);
 	MethodVisitor getStaticInitialiserVisitor();
-	void addField(int addressFieldAccess, String addressFieldName, String desc, Object value);
+	void addField(int syntheticFieldAccess, String syntheticFieldName, String desc, Object value);
 	void close();
-	String getFieldsHolderName(String owner);
+	String getFieldsHolderName();
 }

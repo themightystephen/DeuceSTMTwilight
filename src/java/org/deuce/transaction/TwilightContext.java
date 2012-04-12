@@ -1,7 +1,6 @@
 package org.deuce.transaction;
 
 import org.deuce.objectweb.asm.Type;
-import org.deuce.transaction.tl2twilight.field.ReadFieldAccess;
 
 /**
  * TwilightContext extends the standard STM Context interface provided by Deuce.
@@ -75,5 +74,7 @@ public interface TwilightContext extends org.deuce.transaction.Context {
 
 	// Twilight Tag/Region Operations (tags can be used to mark readset entries and group them according to their semantic meaning)
 	int newTag(); // returns a unique integer identifier which represents a new tag, and can be passed as a parameter to the markField(), isInconsistent(), and isOnlyInconsistent() methods
-	void markField(int tagID, ReadFieldAccess field); // given a field from the readset, we record the association of that field with the given tag
+//	void markField(int tagID, ReadFieldAccess field); // given a field from the readset, we record the association of that field with the given tag
+	void markField(int tagID, Object owningObj, long fieldAddress); // given a field from the readset, we record the association of that field with the given tag
+	// actually, the field is given 'indirectly' by providing the owning object of the field (what happens if it's static field?) and the address of the field as stored in the object's synthetic XXX__ADDRESS__ field (but that field might be stored in one of two places...either in the main class itself (i.e. the same class as the field belongs to) or in a separate holder class (e.g. XXXDeuceFieldsHolder)
 }

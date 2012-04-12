@@ -9,7 +9,7 @@ public class Util {
 	public static String getAddressField( String field) {
 		return field + ADDRESS_FIELD_POSTFIX;
 	}
-	
+
 	public static int calcArgumentsSize( boolean isStatic, Method newMethod){
 		int size = isStatic ? 0 : 1; // if not static "this" is the first argument
 		for( Type type : newMethod.getArgumentTypes()){

@@ -514,9 +514,20 @@ final public class Context implements TwilightContext {
 //		tagToFields.get(tag).add(field);
 //	}
 	@Override
-	public void markField(int tagID, ReadFieldAccess field) {
+	public void markField(int tagID, Object ownerObj, long fieldAddress) {
 		// NOTE: we assume that 'field' is in the readset. We can safely assume this if we generate the code that calls this method (i.e. instrumentation).
-		tagFields.get(tagID).add(field);
+		// Above comment is out-of-date; I may well. I require the programmer to use Twilight API and provide the name of a field. The API implementation does check if the field belongs to the class but currently it doesn't check if its in the readset...
+		// we can't rely on the fact that we're generating code to guarantee correctness because its not pre-determined where the call to markFields happens and even how many times you can do it. The programmer needs the flexibility to call it whenever they like. Thus we are providing an API to do it.
+		// TODO: maybe perform check of whether field is in readset here rather than in the caller to this method (i.e. the Twilight class) -- thankfully the equals() method of ReadFieldAccess is defined in such a way that two ReadFieldAccess objects are equal if they refer to the same field (rather than if they are the exact same object)
+		// assuming I can do the check to see if the field is in the readset, do I throw an (runtime?) exception if it's not?
+		ReadFieldAccess rfa = new ReadFieldAccess(ownerObj, fieldAddress);
+		if(readSet.contains(rfa)) {
+			tagFields.get(tagID).add(rfa);
+		}
+		else {
+			throw new RuntimeException("Attempt to mark field "+rfa+" which is not "); // FIXME: would be nice to not throw RuntimeExceptions every time the programmer breaks the rules. It means the programmer can't be sure their program won't catastrophically fail in certain situations where a certain branch is taken which normally isn't taken (and therefore is not noticed in basic tests -- really it depends how much testing the programmer does).
+			// FIXME: give better error message; show precisely which field it was... -- solve by catching this specific exception in Twilight.markField() and rethrowing it with more detail about the specific field the programmer tried to mark (we have the details about the field in the caller context but not the callee context (i.e. here)) -- I may remove the String message from the exception thrown here and only put it in the caller's rethrow of the exception
+		}
 	}
 
 	/* *******************************
@@ -552,7 +563,7 @@ final public class Context implements TwilightContext {
 
 		// Check the read is valid (PRE-VALIDATION step described in the thesis on p32)
 		preValidationReadVersionedLock = LockManager.checkLock(currentReadFieldAccess.hashCode(), startTime);
-		// Pre-validation passed, so add to read set
+		// Pre-validation passed, so add to read set (if post-validation subsequently fails, not a problem since transaction will just abort and restart)
 		readSet.add(currentReadFieldAccess);
 	}
 
@@ -568,7 +579,7 @@ final public class Context implements TwilightContext {
 		// Check the read is still valid (same lock state and version as in pre-validation) (POST-VALIDATION step described in the thesis on p32)
 		LockManager.checkLock(currentReadFieldAccess.hashCode(), startTime, preValidationReadVersionedLock);
 
-		// Check if it is already included in the write set (returns null if not in write set)
+		// Check if it is already included in the write set (returns null if not in write set) (NOTE: contains method uses equals() method of one of the objects to do this - ReadFieldAcess and WriteFieldAccess objects share common type (ReadFieldAccess) and also common equals and hashcode methods)
 		return writeSet.contains(currentReadFieldAccess);
 	}
 

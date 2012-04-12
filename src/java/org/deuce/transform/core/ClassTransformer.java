@@ -58,7 +58,7 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 
 		// TODO: when doing offline instrumentation, this will do some necessary visiting of its own and other preparation (see ExternalFieldsHolder class)
 		// when fieldsHolder is an ExternalFieldsHolder (i.e. offline instrumentation), causes visits of header of new class for holding fields
-		fieldsHolder.visit(superName);
+		fieldsHolder.visit(superName); // the field holder classes can have a superclass other than Object. This happens whenever the class being transformed itself has a superclass. The DeuceFieldsHolder ends up having a superclass which has the same name as the transformed class's superclass except it is suffixed with DeuceFieldsHolder as well. Basically, the superclass hierarchy for DeuceFieldHolder classes corresponds to that of the transformed classes (containing the original fields).
 
 		// store useful information for later
 		isInterface = (access & Opcodes.ACC_INTERFACE) != 0;
@@ -250,7 +250,7 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 
 	private StaticMethodTransformer createStaticMethodTransformer(MethodVisitor originalMethod, MethodVisitor staticMethod){
 		return new StaticMethodTransformer( originalMethod, staticMethod, fields, staticField,
-				className, fieldsHolder.getFieldsHolderName(className));
+				className, fieldsHolder.getFieldsHolderName());
 	}
 
 	/**
@@ -292,8 +292,8 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 	}
 
 	@Override
-	public String getFieldsHolderName(String owner){
-		return owner;
+	public String getFieldsHolderName(){
+		return className;
 	}
 
 	@Override

@@ -1,9 +1,10 @@
-package org.deuce.transform.core;
+package org.deuce.transform.twilight;
 
 import org.deuce.objectweb.asm.ClassWriter;
 import org.deuce.objectweb.asm.MethodAdapter;
 import org.deuce.objectweb.asm.MethodVisitor;
 import org.deuce.objectweb.asm.Opcodes;
+import org.deuce.transform.twilight.ClassTransformer;
 import org.deuce.transform.commons.ExcludeIncludeStore;
 import org.deuce.transform.commons.FieldsHolder;
 
@@ -19,16 +20,16 @@ import org.deuce.transform.commons.FieldsHolder;
  * @author guy
  * @since 1.1
  */
-public class ExternalFieldsHolder implements FieldsHolder {
+public class ExternalFieldsHolderClass implements FieldsHolder {
 
-	final static private String FIELDS_HOLDER = "DeuceFieldsHolder";
+	final static private String FIELDS_HOLDER_CLASS_NAME_SUFFIX = "DeuceFieldsHolder";
 
 	final private ClassWriter classWriter;
 	final private String className;
 	private ExternalStaticInitialiserVisitor extStaticInitVisitor;
 
-	public ExternalFieldsHolder(String className){
-		this.className = getFieldsHolderName(className);
+	public ExternalFieldsHolderClass(String originalClassName){
+		this.className = originalClassName + FIELDS_HOLDER_CLASS_NAME_SUFFIX;
 		this.classWriter = new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
 	}
 
@@ -45,9 +46,9 @@ public class ExternalFieldsHolder implements FieldsHolder {
 	}
 
 	@Override
-	public void addField(int fieldAccess, String addressFieldName, String desc,
+	public void addField(int syntheticFieldAccess, String syntheticFieldName, String desc,
 			Object value) {
-		classWriter.visitField(fieldAccess, addressFieldName, desc, null, value);
+		classWriter.visitField(syntheticFieldAccess, syntheticFieldName, desc, null, value);
 	}
 
 	@Override
@@ -61,14 +62,27 @@ public class ExternalFieldsHolder implements FieldsHolder {
 		return extStaticInitVisitor;
 	}
 
+	/**
+	 * Name of original owner class concatenated with predefined 'DeuceFieldsHolder' String
+	 */
 	@Override
-	public String getFieldsHolderName(String owner){
-		// name of original owner class concatenated with predefined 'DeuceFieldsHolder' String
-		return owner +  FIELDS_HOLDER;
+	public String getFieldsHolderName() {
+		return className;
 	}
 
-	public byte[] getClassByteCode(){
+	public byte[] getBytecode(){
 		return classWriter.toByteArray();
+	}
+
+	/**
+	 * Given the name of any class, what would be the name of its corresponding fields
+	 * holder class.
+	 *
+	 * @param className Name of class
+	 * @return Name of corresponding fields holder class
+	 */
+	public static String getFieldsHolderName(String className) {
+		return className + FIELDS_HOLDER_CLASS_NAME_SUFFIX;
 	}
 
 	/**

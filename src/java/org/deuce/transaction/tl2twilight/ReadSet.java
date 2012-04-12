@@ -34,6 +34,27 @@ public class ReadSet {
 		readSet.clear();
 	}
 
+	/**
+	 * Returns <code>true</code> if the this ReadSet contains the given
+	 * field (ReadFieldAccess).
+	 *
+	 * @param rfa
+	 * @return
+	 */
+	public boolean contains(final ReadFieldAccess rfa) {
+		// if true is returned from the forEach, this means we did *not* find the ReadFieldAccess in the readSet (therefore we negate return value)
+		// (Bit ugly I admit! Semantics of forEach mean I have to do it this way.)
+		return !(readSet.forEach(new TObjectProcedure<ReadFieldAccess>() {
+			@Override
+			public boolean execute(ReadFieldAccess rfaExisting) {
+				if(rfa.equals(rfaExisting)) {
+					return false; // breaks out of loop
+				}
+				return true; // keep on looking
+			}
+		}));
+	}
+
 	// for EVERY variable in the read set, we check that its associated lock........ -- a variable's index into the lock table is given by the hashcode of its current value
 	// part of VALIDATION process for read set (LockTable.checkLock in the call chain is also part of the process).
 	// For each variable in the read set, validate that their associated versioned-lock is still valid

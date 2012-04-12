@@ -6,6 +6,13 @@ import org.deuce.transaction.Context;
 import org.deuce.transform.commons.Exclude;
 
 /**
+ * <p>IMPORTANT: Each thread has its own instance of the Context class chosen by the user using
+ * chosenContext (see ContextThreadLocal nested class below). A thread can access its Context
+ * instance simply by calling ContextDelegator.getInstance(). Only one transaction can take place
+ * in a given thread at a time; therefore a single instance of (an implementation of) Context is
+ * sufficient. Calls to init() at the start of each transaction ensure that we start on a clean
+ * slate for each transaction.</p>
+ *
  * <p>The methods here are called in the generated code. The methods then simply make delegate calls
  * to the Context. The methods from the Context that are actually called from here include
  * beforeReadAccess, onReadAccess, onIrrevocableAccess, and onWriteAccess. Other Context methods

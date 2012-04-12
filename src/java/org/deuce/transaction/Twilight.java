@@ -1,5 +1,16 @@
 package org.deuce.transaction;
 
+import static org.deuce.objectweb.asm.Opcodes.GETSTATIC;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+
+import org.deuce.reflection.AddressUtil;
+import org.deuce.transform.commons.FieldsHolder;
+import org.deuce.transform.commons.util.Util;
+import org.deuce.transform.twilight.ExternalFieldsHolderClass;
+import org.deuce.transform.twilight.method.StaticInitialiserTransformer;
+
 /**
  * API for programmers to directly access operations of TwilightContext class.
  * In non-twilight transactions, there was no requirement for such an API because the
@@ -37,9 +48,14 @@ package org.deuce.transaction;
  * remembering that they assume I were taking the approach of three separately annotated methods rather than
  * one method with everything in it (transactional zone and twilight zone).]
  *
+ * TODO: stop programmer calling Twilight operations if they are not inside an @Atomic method which has
+ * its twilight attribute set to true.
+ *
  * @author Stephen Tuttlebee
  */
 public class Twilight {
+	private static final TwilightContext context = TwilightContextDelegator.getInstance();
+
 	// ------------------------------------------------------------------------
 	// (SOME) TWILIGHT WORKFLOW OPERATIONS
 	// ------------------------------------------------------------------------
@@ -51,11 +67,13 @@ public class Twilight {
 	 * annotated methods.</p>
 	 */
 	public static boolean prepareCommit() {
-		return false; //TODO
+		return context.prepareCommit();
 	}
 
 	/**
 	 * <p>Restarts the transaction.</p>
+	 *
+	 * // we're going to let the user be able to restart via this operation as the method of choice for restarting a transaction (rather than throwing a TransactionException manually)
 	 *
 	 * <p>This operation may be called from within the <code>@TwilightAtomic</code>,
 	 * <code>@TwilightInconsistent</code>, or <code>@TwilightConsistent</code> methods.
@@ -63,7 +81,7 @@ public class Twilight {
 	 * sense!).</p>
 	 */
 	public static void restart() {
-		// we're going to let the user be able to restart via this operation as the method of choice for restarting a transaction (rather than throwing a TransactionException manually)
+		context.restart();
 	}
 
 	// ------------------------------------------------------------------------
@@ -76,7 +94,7 @@ public class Twilight {
 	 * <code>@TwilightInconsistent</code> methods.</p>
 	 */
 	public static void reload() {
-
+		context.reload();
 	}
 
 	/**
@@ -87,7 +105,7 @@ public class Twilight {
 	 * <code>@TwilightInconsistent</code> methods.</p>
 	 */
 	public static void ignoreUpdates() {
-
+		context.ignoreUpdates();
 	}
 
 	/**
@@ -102,7 +120,7 @@ public class Twilight {
 	 * <code>false</code> otherwise
 	 */
 	public static boolean isInconsistent(int tagID) {
-		return true; // TODO
+		return context.isInconsistent(tagID);
 	}
 
 	/**
@@ -116,7 +134,7 @@ public class Twilight {
 	 * @return TODO: semantics of return value are not clear yet...
 	 */
 	public static boolean isOnlyInconsistent(int tagID) {
-		return true; // TODO
+		return context.isOnlyInconsistent(tagID);
 	}
 
 	// ------------------------------------------------------------------------
@@ -134,23 +152,122 @@ public class Twilight {
 	 * @return Unique integer identifier which represents a new tag
 	 */
 	public static int newTag() {
-		return 0; // TODO
+		return context.newTag();
 	}
 
 	/**
+	 * You have to provide the field name. This overloaded version of markField is for instance fields.
+	 *
 	 * <p>Given a field from the readset, we record the association of that field with the given tag.
 	 * This can be used later by the repair operations isInconsistent() and isOnlyInconsistent().</p>
 	 *
 	 * <p>This is a Twilight tag/region operation. It should only be called from within
 	 * <code>@TwilightAtomic</code> methods.</p>
 	 *
+	 * TODO: Oh dear! I'm getting the address based on the assumption that the fieldOwnerObject passed to
+	 * the method IS the fields holder object / class (?). I somehow need to know, given an instance of
+	 * the original class, if this original class is the field holding class. If it is, then I can just
+	 * access its static (synthetic) address fields easily.
+	 *
+	 * TODO: I need to check and make sure that the field the programmer is asking to mark is in the
+	 * readset. If its not, then
+	 *
+	 * Note: I expect that the use of reflection might make this a slow operation.
+	 *
 	 * @param tagID A tag ID
 	 * @param field
+	 * @param fieldOwnerObject The object owning the field (very often 'this')
 	 */
-	public static void markField(int tagID, String fieldName, Class<?> owningClass) { // FIXME: problem! We can't have the user using ReadFieldAccess objects!
-		// TODO: use reflection to turn fieldName String into Field or whatever and hopefully eventually into
-		// a ReadFieldAccess, which I can pass into the call to the markField(int, ReadFieldAccess) method in the Context
+	// TODO: this method not finished.
+	public static void markField(int tagID, String fieldName, Object fieldOwnerObject) {
+		long address;
+		Object addressFieldOwnerObject;
 
-		// throw a subclass of RuntimeException if the field does exist for the given class
+		try {
+			// check if final field, if so, ignore the request to mark the field (we could get problems otherwise)!
+			if(Modifier.isFinal(fieldOwnerObject.getClass().getDeclaredField(fieldName).getModifiers()))
+				return;
+
+			// check if field is in readset.
+
+			String addressFieldName = Util.getAddressField(fieldName); // yes, it was used only in the transform package previously, but I still need to use it here!
+			Field addressField = fieldOwnerObject.getClass().getField(addressFieldName);
+			address = addressField.getLong(fieldOwnerObject); // ok, finally have the address itself
+		}
+		// field not in readset
+		catch (RuntimeException e) {
+			throw new RuntimeException("Attempt to mark field '"+fieldName+"' which is not in the readset. Fields must already be in readset. Try placing calls to markField() at the end of the transactional zone to ensure all fields read during the transaction are in the readset before calls to markField().",e);
+		}
+		catch (IllegalAccessException e) {
+			throw new RuntimeException(e);
+		}
+		// reflection failed (most likely cause is because given field does not exist in given owner object)
+		catch (Exception e) {
+			throw new RuntimeException("Attempt to mark a field failed. Field does not exist in given owner object.",e);
+		}
+
+		/*
+		 * Here, the field is given 'indirectly' by providing the owning object of the field (what happens if it's static field?)
+		 * and the address of the field as stored in the object's synthetic XXX__ADDRESS__ field (but that field might be stored
+		 * in one of two places...either in the main class itself (i.e. the same class as the field belongs to) or in a separate
+		 * holder class (e.g. XXXDeuceFieldsHolder)
+		 */
+		// BEWARE: the owner object of the original field is NOT NECESSARILY the owner object for the corresponding address field; if class was instrumented offline, the address fields will be in the XXXDeuceFieldsHolder class
+		// We do not know which it will be, therefore
+		// TODO: Could add an '@Instrumented' annotation which is attached to each transformed class. It would have an attribute, 'online', which is true or false, corresponding to online and offline, respectively. It is right to add this to EVERY transformed class, because some classes might be instrumented offline and some others online in the same JVM execution; we don't know and therefore we can't make assumptions. Specifying online vs. offline at the class-level gives us absolute certainty about whether the synthetic address fields are held in the same class as the original fields or in a separate fields holder class.
+		// Assuming that we ALWAYS added the @Instrumented annotation, All we would have to do would be to look at the @Instrumented annotation and if online==true, then we know the owning object for the address fields is the same as for the original fields. Otherwise, if online==false, then the address fields must be held in a separate fields holder class
+		// IDEA: we could also use the @Instrumented annotation for another purpose: to know when NOT to re-instrument a class (rather than relying on adding the @Exclude annotation to the transformed classes...it works but it's not elegant). Just add @Instrumented annotation to all classes we transform (regardless of whether any proper transformations have happened. If we put some classefiles through again that have already been transformed, there's no point putting them through again even if there's nothing to do).
+
+		// workaround for now: try both...[will this even work?! I might be forced to use the @Instrumented annotation above]
+//		if() // if
+//			addressFieldOwnerObject = fieldOwnerObject;
+//		else
+			// hmmm, this is a String, not an Object
+//			addressFieldOwnerObject = ExternalFieldsHolderClass.getFieldsHolderName(fieldOwnerObject.getClass().getSimpleName());
+
+		// ACTUALLY, I'm not sure if the 'owner' object simply refers to the original owner regardless of whether there is a separate fields holder class...
+		addressFieldOwnerObject = fieldOwnerObject;
+		context.markField(tagID, addressFieldOwnerObject, address); // FIXME: not 100% sure.
+	}
+
+	/**
+	 * This overloaded version of markField is for static/class fields.
+	 *
+	 * @param tagID
+	 * @param fieldName
+	 * @param fieldOwnerClass
+	 */
+	// TODO: this method not finished.
+	public static void markField(int tagID, String fieldName, Class<?> fieldOwnerClass) {
+		// following is how to deal with static fields... (copied from DuplicateMethod class)
+		// name of field's owner class is given by the fieldsHolderName variable
+		// the field's name is given by: StaticInitialiserTransformer.CLASS_BASE
+		// if you remember, the __CLASS_BASE__ field holds values of type Object
+//		super.visitFieldInsn(GETSTATIC, fieldsHolderName,
+//				StaticInitialiserTransformer.CLASS_BASE, "Ljava/lang/Object;");
+
+		// 1. get the value of __CLASS_BASE__ (held in whatever the field holder class is)
+		// 2.
+
+
+		long address;
+		Object addressFieldOwnerObject;
+
+		try {
+			// check if final field, if so, ignore the request to mark the field (we could get problems otherwise)!
+			if(Modifier.isFinal(fieldOwnerClass.getDeclaredField(fieldName).getModifiers()))
+				return;
+
+			String addressFieldName = Util.getAddressField(fieldName); // yes, it was used only in the transform package previously, but I still need to use it here!
+			Field addressField = fieldOwnerClass.getField(addressFieldName);
+			address = addressField.getLong(fieldOwnerObject); // ok, finally have the address itself
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new RuntimeException("Attempt to mark a field failed. Field does not exist in given owner object.",e);
+		}
+
+		// ACTUALLY, I'm not sure if the 'owner' object simply refers to the original owner regardless of whether there is a separate fields holder class...
+		addressFieldOwnerObject = fieldOwnerObject;
+		context.markField(tagID, addressFieldOwnerObject, address); // FIXME: not 100% sure.
 	}
 }
