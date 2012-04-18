@@ -17,6 +17,7 @@ import org.deuce.transform.commons.Exclude;
  * @author stephen
  *
  */
+@Exclude
 public class TwilightContextDelegator extends ContextDelegator {
 	//DEFAULT_TWILIGHTCONTEXT_CLASS??
 	final static public Class<? extends TwilightContext> DEFAULT_CONTEXT_CLASS = org.deuce.transaction.tl2twilight.Context.class;

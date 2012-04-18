@@ -1,6 +1,7 @@
 package org.deuce.transaction;
 
 import org.deuce.objectweb.asm.Type;
+import org.deuce.transform.commons.Exclude;
 
 /**
  * TwilightContext extends the standard STM Context interface provided by Deuce.
@@ -54,6 +55,7 @@ import org.deuce.objectweb.asm.Type;
  *
  * @author Stephen Tuttlebee
  */
+@Exclude
 public interface TwilightContext extends org.deuce.transaction.Context {
 	// Constants used in dynamically generated code
 	final static public Type TWILIGHTCONTEXT_TYPE = Type.getType(TwilightContext.class);

@@ -8,8 +8,8 @@
 			<manifest>
 				<attribute name="Implementation-Vendor" value="deuce.org" />
 				<attribute name="Implementation-Version" value="1.4"/>
-				<attribute name="Premain-Class" value="org.deuce.transform.asm.Agent" />
-				<attribute name="Main-Class" value="org.deuce.transform.asm.Agent"/>
+				<attribute name="Premain-Class" value="org.deuce.transform.Agent" />
+				<attribute name="Main-Class" value="org.deuce.transform.Agent"/>
 				<attribute name="Can-Redefine-Classes" value="true"/>
 				<attribute name="Can-Retransform-Classes" value="true"/>
 				<attribute name="Compatible" value="1.6"/>

@@ -29,6 +29,7 @@ import org.deuce.transform.commons.Exclude;
  * @since	1.0
  *
  */
+@Exclude //added by me
 public class ContextDelegator {
 	final static public Class<? extends Context> DEFAULT_CONTEXT_CLASS = org.deuce.transaction.lsa.Context.class;
 

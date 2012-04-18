@@ -8,16 +8,17 @@ import org.deuce.transform.commons.util.IgnoreTree;
 
 /**
  * Holds the include/exclude information for the classes to instrument.
- *  
+ *
  * @author guy
  * @since 1.1
  */
+@Exclude //added by me
 public class ExcludeIncludeStore {
 
 	final private IgnoreTree excludeTree;
 	final private IgnoreTree includeTree;
 	final private HashSet<String> excludeClass = new HashSet<String>();
-	
+
 	final private static ExcludeIncludeStore excludeIncludeStore = new ExcludeIncludeStore();
 	static{
 		excludeIncludeStore.excludeClass.add("java/lang/Object");
@@ -28,7 +29,7 @@ public class ExcludeIncludeStore {
 		excludeIncludeStore.excludeClass.add(AbortTransactionException.ABORT_TRANSACTION_EXCEPTION_INTERNAL);
 	}
 
-	
+
 	private ExcludeIncludeStore(){
 
 		String property = System.getProperty("org.deuce.exclude");
@@ -41,11 +42,11 @@ public class ExcludeIncludeStore {
 			property = "";
 		includeTree = new IgnoreTree( property);
 	}
-	
+
 	public static boolean exclude(String className){
 		if(excludeIncludeStore.excludeClass.contains(className))
 			return true;
 		return excludeIncludeStore.excludeTree.contains(className) && !excludeIncludeStore.includeTree.contains(className);
-	} 
-	
+	}
+
 }

@@ -45,7 +45,8 @@ public class ExampleOneMethod {
 		int counterTag = Twilight.newTag();
 		int pos = counter + 1;
 		counter = pos;
-		Twilight.markField(counterTag, "counter", ExampleOneMethod.class); // NOTE: only way I can see of indicating the variable to be marked is to pass the String name and then use Java reflection
+		// FIXME: will uncomment once markField is implemented
+//		Twilight.markField(counterTag, "counter", ExampleOneMethod.class); // NOTE: only way I can see of indicating the variable to be marked is to pass the String name and then use Java reflection
 
 		boolean consistent = Twilight.prepareCommit(); //TODO
 		// TWILIGHT ZONE

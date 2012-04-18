@@ -7,6 +7,7 @@ import org.deuce.objectweb.asm.MethodVisitor;
  * @author guy
  * @since 1.1
  */
+@Exclude //added by me
 public interface FieldsHolder {
 
 	void visit(String superName);
