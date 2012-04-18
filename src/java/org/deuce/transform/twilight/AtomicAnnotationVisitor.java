@@ -1,14 +1,16 @@
 package org.deuce.transform.twilight;
 
 import org.deuce.objectweb.asm.AnnotationVisitor;
+import org.deuce.objectweb.asm.Opcodes;
 import org.deuce.transform.core.method.AtomicMethod;
 
-public class AtomicAnnotationVisitor implements AnnotationVisitor {
+public class AtomicAnnotationVisitor extends AnnotationVisitor {
 
 	private final AtomicMethod method;
 	private final AnnotationVisitor annotation;
 
 	public AtomicAnnotationVisitor(AtomicMethod method, AnnotationVisitor annotation) {
+		super(Opcodes.ASM4);
 		this.method = method;
 		this.annotation = annotation;
 	}

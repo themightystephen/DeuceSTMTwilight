@@ -1,7 +1,6 @@
 package org.deuce.transform.core;
 
 import org.deuce.objectweb.asm.ClassWriter;
-import org.deuce.objectweb.asm.MethodAdapter;
 import org.deuce.objectweb.asm.MethodVisitor;
 import org.deuce.objectweb.asm.Opcodes;
 import org.deuce.transform.core.ClassTransformer;
@@ -88,12 +87,12 @@ public class ExternalFieldsHolderClass implements FieldsHolder {
 	/**
 	* A wrapper method that is used to close the new <clinit>.
 	*/
-	private static class ExternalStaticInitialiserVisitor extends MethodAdapter{
+	private static class ExternalStaticInitialiserVisitor extends MethodVisitor {
 
 		private boolean ended = false;
 
 		public ExternalStaticInitialiserVisitor(MethodVisitor mv) {
-			super(mv);
+			super(Opcodes.ASM4,mv);
 		}
 
 		@Override

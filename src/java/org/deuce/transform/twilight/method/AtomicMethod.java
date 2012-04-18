@@ -4,8 +4,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.deuce.objectweb.asm.AnnotationVisitor;
 import org.deuce.objectweb.asm.Label;
-import org.deuce.objectweb.asm.MethodAdapter;
 import org.deuce.objectweb.asm.MethodVisitor;
+import org.deuce.objectweb.asm.Opcodes;
 import org.deuce.objectweb.asm.Type;
 import org.deuce.objectweb.asm.commons.Method;
 import org.deuce.transaction.AbortTransactionException;
@@ -31,7 +31,7 @@ import static org.deuce.objectweb.asm.Opcodes.*;
  * @author Guy Korland
  * @author Stephen Tuttlebee
  */
-public class AtomicMethod extends MethodAdapter {
+public class AtomicMethod extends MethodVisitor {
 
 	final static private AtomicInteger ATOMIC_BLOCK_COUNTER = new AtomicInteger(0);
 	final static private String ATOMIC_ANNOTATION_NAME_RETRIES = "retries";
@@ -53,7 +53,7 @@ public class AtomicMethod extends MethodAdapter {
 
 	public AtomicMethod(MethodVisitor mv, String className, String methodName,
 			String descriptor, Method newMethod, boolean isStatic) {
-		super(mv);
+		super(Opcodes.ASM4,mv);
 		this.className = className;
 		this.methodName = methodName;
 		this.newMethod = newMethod;
@@ -76,7 +76,7 @@ public class AtomicMethod extends MethodAdapter {
 		final AnnotationVisitor av = super.visitAnnotation(desc, visible);
 
 		if(MethodTransformer.ATOMIC_DESCRIPTOR.equals(desc)) {
-			return new AnnotationVisitor() {
+			return new AnnotationVisitor(Opcodes.ASM4) {
 				public void visit(String name, Object value) {
 					// retries
 					if(name.equals(ATOMIC_ANNOTATION_NAME_RETRIES))

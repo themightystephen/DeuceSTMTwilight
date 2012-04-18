@@ -4,7 +4,7 @@ import org.deuce.objectweb.asm.ClassVisitor;
 import org.deuce.objectweb.asm.MethodVisitor;
 import org.deuce.transform.commons.BaseClassTransformer;
 
-public class ClassTransformer extends BaseClassTransformer{
+public class ClassTransformer extends BaseClassTransformer {
 
 	public ClassTransformer(ClassVisitor cv, String className) {
 		super(cv, className); // FIXME: not sure that adding this cv parameter was a good idea. I might easily have broken something!

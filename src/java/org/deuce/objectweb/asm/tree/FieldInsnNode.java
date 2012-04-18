@@ -1,6 +1,6 @@
 /***
  * ASM: a very small and fast Java bytecode manipulation framework
- * Copyright (c) 2000-2007 INRIA, France Telecom
+ * Copyright (c) 2000-2011 INRIA, France Telecom
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,14 +36,14 @@ import org.deuce.objectweb.asm.MethodVisitor;
 /**
  * A node that represents a field instruction. A field instruction is an
  * instruction that loads or stores the value of a field of an object.
- * 
+ *
  * @author Eric Bruneton
  */
 public class FieldInsnNode extends AbstractInsnNode {
 
     /**
      * The internal name of the field's owner class (see
-     * {@link org.deuce.objectweb.asm.Type#getInternalName() getInternalName}).
+     * {@link org.objectweb.asm.Type#getInternalName() getInternalName}).
      */
     public String owner;
 
@@ -53,19 +53,19 @@ public class FieldInsnNode extends AbstractInsnNode {
     public String name;
 
     /**
-     * The field's descriptor (see {@link org.deuce.objectweb.asm.Type}).
+     * The field's descriptor (see {@link org.objectweb.asm.Type}).
      */
     public String desc;
 
     /**
      * Constructs a new {@link FieldInsnNode}.
-     * 
+     *
      * @param opcode the opcode of the type instruction to be constructed. This
      *        opcode must be GETSTATIC, PUTSTATIC, GETFIELD or PUTFIELD.
      * @param owner the internal name of the field's owner class (see
-     *        {@link org.deuce.objectweb.asm.Type#getInternalName() getInternalName}).
+     *        {@link org.objectweb.asm.Type#getInternalName() getInternalName}).
      * @param name the field's name.
-     * @param desc the field's descriptor (see {@link org.deuce.objectweb.asm.Type}).
+     * @param desc the field's descriptor (see {@link org.objectweb.asm.Type}).
      */
     public FieldInsnNode(
         final int opcode,
@@ -81,7 +81,7 @@ public class FieldInsnNode extends AbstractInsnNode {
 
     /**
      * Sets the opcode of this instruction.
-     * 
+     *
      * @param opcode the new instruction opcode. This opcode must be GETSTATIC,
      *        PUTSTATIC, GETFIELD or PUTFIELD.
      */
@@ -89,15 +89,18 @@ public class FieldInsnNode extends AbstractInsnNode {
         this.opcode = opcode;
     }
 
+    @Override
     public int getType() {
         return FIELD_INSN;
     }
 
+    @Override
     public void accept(final MethodVisitor cv) {
         cv.visitFieldInsn(opcode, owner, name, desc);
     }
 
-    public AbstractInsnNode clone(final Map labels) {
+    @Override
+    public AbstractInsnNode clone(final Map<LabelNode, LabelNode> labels) {
         return new FieldInsnNode(opcode, owner, name, desc);
     }
 }

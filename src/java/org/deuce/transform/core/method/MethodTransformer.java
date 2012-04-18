@@ -24,7 +24,7 @@ import static org.deuce.objectweb.asm.Opcodes.*;
  *
  * @author Guy Korland
  */
-public class MethodTransformer implements MethodVisitor {
+public class MethodTransformer extends MethodVisitor {
 
 	final static public String ATOMIC_DESCRIPTOR = Type.getDescriptor(Atomic.class);
 	final static private String UNSAFE_DESCRIPTOR = Type.getDescriptor(Unsafe.class);
@@ -46,6 +46,7 @@ public class MethodTransformer implements MethodVisitor {
 	public MethodTransformer(MethodVisitor originalMethod, MethodVisitor copyMethod,
 			String className, int access, String methodName, String descriptor, Method newMethod,
 			FieldsHolder fieldsHolder) {
+		super(Opcodes.ASM4);
 
 		this.originalMethod = originalMethod;
 		this.newMethod = newMethod;

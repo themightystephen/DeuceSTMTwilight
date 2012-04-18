@@ -1,8 +1,8 @@
 package org.deuce.transform.commons;
 
-import org.deuce.objectweb.asm.ClassAdapter;
 import org.deuce.objectweb.asm.ClassVisitor;
 import org.deuce.objectweb.asm.MethodVisitor;
+import org.deuce.objectweb.asm.Opcodes;
 import org.deuce.objectweb.asm.commons.JSRInlinerAdapter;
 
 
@@ -17,7 +17,7 @@ import org.deuce.objectweb.asm.commons.JSRInlinerAdapter;
  * @author Guy Korland
  * @since 1.0
  */
-public class BaseClassTransformer extends ClassAdapter {
+public class BaseClassTransformer extends ClassVisitor {
 	protected final String className;
 	private int maximalversion = Integer.MAX_VALUE; // the maximal bytecode version to transform
 
@@ -28,7 +28,7 @@ public class BaseClassTransformer extends ClassAdapter {
 	 * @param className
 	 */
 	public BaseClassTransformer(ClassVisitor cv, String className) {
-		super(cv);
+		super(Opcodes.ASM4,cv);
 		this.className = className;
 	}
 

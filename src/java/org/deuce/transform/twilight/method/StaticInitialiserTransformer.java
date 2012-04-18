@@ -2,8 +2,8 @@ package org.deuce.transform.twilight.method;
 
 import java.util.List;
 
-import org.deuce.objectweb.asm.MethodAdapter;
 import org.deuce.objectweb.asm.MethodVisitor;
+import org.deuce.objectweb.asm.Opcodes;
 import org.deuce.objectweb.asm.Type;
 import org.deuce.transform.commons.Field;
 
@@ -19,7 +19,7 @@ import static org.deuce.objectweb.asm.Opcodes.*;
  *
  * @author Guy
  */
-public class StaticInitialiserTransformer extends MethodAdapter {
+public class StaticInitialiserTransformer extends MethodVisitor {
 	final static public String CLASS_BASE = "__CLASS_BASE__";
 
 	private final List<Field> syntheticFields;
@@ -41,7 +41,7 @@ public class StaticInitialiserTransformer extends MethodAdapter {
 	 */
 	public StaticInitialiserTransformer(MethodVisitor mv, MethodVisitor staticInitialiserMethod, List<Field> syntheticFields,
 			String aNonSyntheticStaticField, String className, String fieldsHolderName) {
-		super(mv);
+		super(Opcodes.ASM4,mv);
 		this.staticInitialiserMethod = staticInitialiserMethod;
 		this.syntheticFields = syntheticFields;
 		this.aNonSyntheticStaticField = aNonSyntheticStaticField;

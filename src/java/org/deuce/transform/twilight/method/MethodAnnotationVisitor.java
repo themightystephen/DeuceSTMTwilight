@@ -1,6 +1,7 @@
 package org.deuce.transform.twilight.method;
 
 import org.deuce.objectweb.asm.AnnotationVisitor;
+import org.deuce.objectweb.asm.Opcodes;
 
 /**
  * [Annotations can have name-value pairs. This visitor visits these. [mention about visiting arrays and annotations
@@ -8,12 +9,13 @@ import org.deuce.objectweb.asm.AnnotationVisitor;
  *
  * @author Guy Korland
  */
-public class MethodAnnotationVisitor implements AnnotationVisitor {
+public class MethodAnnotationVisitor extends AnnotationVisitor {
 
 	private final AnnotationVisitor originalVisitor;
 	private final AnnotationVisitor copyVisitor;
 
 	public MethodAnnotationVisitor( AnnotationVisitor originalVisitor, AnnotationVisitor copyVisitor) {
+		super(Opcodes.ASM4);
 		this.originalVisitor = originalVisitor;
 		this.copyVisitor = copyVisitor;
 	}

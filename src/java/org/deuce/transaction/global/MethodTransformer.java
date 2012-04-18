@@ -3,14 +3,14 @@ package org.deuce.transaction.global;
 import org.deuce.Atomic;
 import org.deuce.objectweb.asm.AnnotationVisitor;
 import org.deuce.objectweb.asm.Label;
-import org.deuce.objectweb.asm.MethodAdapter;
 import org.deuce.objectweb.asm.MethodVisitor;
+import org.deuce.objectweb.asm.Opcodes;
 import org.deuce.objectweb.asm.Type;
 import static org.deuce.objectweb.asm.Opcodes.*;
 
-public class MethodTransformer extends MethodAdapter{
+public class MethodTransformer extends MethodVisitor {
 
-	final static private String ATOMIC_METHOD_POST = "__atomic__"; 
+	final static private String ATOMIC_METHOD_POST = "__atomic__";
 
 	private final ClassTransformer classTransformer;
 	private final int access;
@@ -18,12 +18,12 @@ public class MethodTransformer extends MethodAdapter{
 	private final String desc;
 	private final String signature;
 	private final String[] exceptions;
-	
-	private MethodVisitor atomicVisitor = null; // visitor of the wrapping method if there's one 
+
+	private MethodVisitor atomicVisitor = null; // visitor of the wrapping method if there's one
 
 	public MethodTransformer( MethodVisitor visitor, int access, String name, String desc,
 			String signature, String[] exceptions, ClassTransformer classTransformer) {
-		super(visitor);
+		super(Opcodes.ASM4,visitor);
 		this.access = access;
 		this.name = name;
 		this.desc = desc;
@@ -35,11 +35,11 @@ public class MethodTransformer extends MethodAdapter{
 	@Override
 	public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
 		boolean atomic = Type.getDescriptor(Atomic.class).equals(desc);
-		if( atomic) { 
+		if( atomic) {
 			atomicVisitor = mv;
-			
+
 			// FIXME handle native methods
-			
+
 			buildAtomic();
 
 			// replace with the logic method
@@ -47,12 +47,12 @@ public class MethodTransformer extends MethodAdapter{
 					(access & ~ACC_PUBLIC & ~ACC_PROTECTED) | ACC_PRIVATE,
 					name + ATOMIC_METHOD_POST, this.desc, this.signature, this.exceptions);
 		}
-		
+
 		if( atomicVisitor != null){
 			return atomicVisitor.visitAnnotation(desc, visible); // annotate the wrapping method
 		}
-		
-		return super.visitAnnotation(desc, visible); 
+
+		return super.visitAnnotation(desc, visible);
 	}
 
 	private void buildAtomic() {
@@ -63,7 +63,7 @@ public class MethodTransformer extends MethodAdapter{
 
 		atomicVisitor.visitCode();
 
-		// enter synchronized block 
+		// enter synchronized block
 		Label l0 = new Label();
 		Label l1 = new Label();
 		Label l2 = new Label();
@@ -93,7 +93,7 @@ public class MethodTransformer extends MethodAdapter{
 		atomicVisitor.visitLabel(l3);
 		atomicVisitor.visitInsn(ATHROW);
 
-		atomicVisitor.visitMaxs(0, 0); // compute MAX is set 
+		atomicVisitor.visitMaxs(0, 0); // compute MAX is set
 		atomicVisitor.visitEnd();
 	}
 

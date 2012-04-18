@@ -5,8 +5,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.deuce.Atomic;
 import org.deuce.objectweb.asm.AnnotationVisitor;
 import org.deuce.objectweb.asm.Label;
-import org.deuce.objectweb.asm.MethodAdapter;
 import org.deuce.objectweb.asm.MethodVisitor;
+import org.deuce.objectweb.asm.Opcodes;
 import org.deuce.objectweb.asm.Type;
 import org.deuce.objectweb.asm.commons.Method;
 import org.deuce.transaction.AbortTransactionException;
@@ -20,19 +20,19 @@ import static org.deuce.objectweb.asm.Opcodes.*;
 
 /**
  * Used to replaced the original @atomic method with a method that run the transaction loop.
- * On each round the transaction contest reinitialized and the duplicated method is called with the 
+ * On each round the transaction contest reinitialized and the duplicated method is called with the
  * transaction context.
- *  
+ *
  * @author Guy Korland
  */
-public class AtomicMethod extends MethodAdapter{
+public class AtomicMethod extends MethodVisitor {
 
 	final static public String ATOMIC_DESCRIPTOR = Type.getDescriptor(Atomic.class);
 	final static private AtomicInteger ATOMIC_BLOCK_COUNTER = new AtomicInteger(0);
-	
+
 	private Integer retries = Integer.getInteger("org.deuce.transaction.retries", Integer.MAX_VALUE);
 	private String metainf = "";//Integer.getInteger("org.deuce.transaction.retries", Integer.MAX_VALUE);
-	
+
 	final private String className;
 	final private String methodName;
 	final private TypeCodeResolver returnReolver;
@@ -40,10 +40,10 @@ public class AtomicMethod extends MethodAdapter{
 	final private boolean isStatic;
 	final private int variablesSize;
 	final private Method newMethod;
-	
+
 	public AtomicMethod(MethodVisitor mv, String className, String methodName,
 			String descriptor, Method newMethod, boolean isStatic) {
-		super(mv);
+		super(Opcodes.ASM4,mv);
 		this.className = className;
 		this.methodName = methodName;
 		this.newMethod = newMethod;
@@ -59,20 +59,20 @@ public class AtomicMethod extends MethodAdapter{
 		}
 		variablesSize = variablesSize( argumentReolvers, isStatic);
 	}
-	
+
 
 	@Override
 	public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
 		final AnnotationVisitor visitAnnotation = super.visitAnnotation(desc, visible);
 		if( AtomicMethod.ATOMIC_DESCRIPTOR.equals(desc)){
-			return new AnnotationVisitor(){
+			return new AnnotationVisitor(Opcodes.ASM4){
 				public void visit(String name, Object value) {
 					if( name.equals("retries"))
 						AtomicMethod.this.retries = (Integer)value;
-					
+
 					if( name.equals("metainf"))
 						AtomicMethod.this.metainf = (String)value;
-					
+
 					visitAnnotation.visit(name, value);
 				}
 				public AnnotationVisitor visitAnnotation(String name, String desc) {
@@ -82,7 +82,7 @@ public class AtomicMethod extends MethodAdapter{
 					return visitAnnotation.visitArray(name);
 				}
 				public void visitEnd() {
-					visitAnnotation.visitEnd();				
+					visitAnnotation.visitEnd();
 				}
 				public void visitEnum(String name, String desc, String value) {
 					visitAnnotation.visitEnum(name, desc, value);
@@ -108,7 +108,7 @@ public class AtomicMethod extends MethodAdapter{
 			}
 			catch( AbortTransactionException ex)
 			{
-				context.rollback(); 
+				context.rollback();
 				throw ex;
 			}
 			catch( TransactionException ex)
@@ -130,7 +130,7 @@ public class AtomicMethod extends MethodAdapter{
 			}
 			else
 			{
-				context.rollback(); 
+				context.rollback();
 				commit = true;
 			}
 		}
@@ -153,22 +153,22 @@ public class AtomicMethod extends MethodAdapter{
 		Label l25 = new Label();
 		mv.visitTryCatchBlock(l0, l1, l25, AbortTransactionException.ABORT_TRANSACTION_EXCEPTION_INTERNAL);  // try{
 		Label l2 = new Label();
-		mv.visitTryCatchBlock(l0, l1, l2, TransactionException.TRANSACTION_EXCEPTION_INTERNAL);  // try{ 
+		mv.visitTryCatchBlock(l0, l1, l2, TransactionException.TRANSACTION_EXCEPTION_INTERNAL);  // try{
 		Label l3 = new Label();
 		mv.visitTryCatchBlock(l0, l1, l3, Type.getInternalName( Throwable.class));  // try{
-		
+
 		Label l4 = new Label(); // Throwable throwable = null;
 		mv.visitLabel(l4);
 		mv.visitInsn(ACONST_NULL);
 		mv.visitVarInsn(ASTORE, throwableIndex);
-		
+
 		Label l5 = getContext(contextIndex); // Context context = ContextDelegator.getInstance();
-			
+
 		Label l6 = new Label(); // boolean commit = true;
 		mv.visitLabel(l6);
 		mv.visitInsn(ICONST_1);
 		mv.visitVarInsn(ISTORE, commitIndex);
-		
+
 		Label l7 = new Label(); // ... result = null;
 		mv.visitLabel(l7);
 		if( returnReolver != null)
@@ -176,46 +176,46 @@ public class AtomicMethod extends MethodAdapter{
 			mv.visitInsn( returnReolver.nullValueCode());
 			mv.visitVarInsn( returnReolver.storeCode(), resultIndex);
 		}
-		
+
 		Label l8 = new Label(); // for( int i=10 ; ... ; ...)
 		mv.visitLabel(l8);
 		mv.visitLdcInsn( retries);
 		mv.visitVarInsn(ISTORE, indexIndex);
-		
+
 		Label l9 = new Label();
 		mv.visitLabel(l9);
 		Label l10 = new Label();
 		mv.visitJumpInsn(GOTO, l10);
-		
+
 		Label l11 = new Label(); // context.init(atomicBlockId, metainf);
 		mv.visitLabel(l11);
 		mv.visitVarInsn(ALOAD, contextIndex);
 		mv.visitLdcInsn(ATOMIC_BLOCK_COUNTER.getAndIncrement());
 		mv.visitLdcInsn(metainf);
 		mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "init", "(ILjava/lang/String;)V");
-		
-		/* result = foo( context, ...)  */ 
+
+		/* result = foo( context, ...)  */
 		mv.visitLabel(l0);
 		if( !isStatic) // load this id if not static
 			mv.visitVarInsn(ALOAD, 0);
 
 		// load the rest of the arguments
 		int local = isStatic ? 0 : 1;
-		for( int i=0 ; i < argumentReolvers.length ; ++i) { 
+		for( int i=0 ; i < argumentReolvers.length ; ++i) {
 			mv.visitVarInsn(argumentReolvers[i].loadCode(), local);
 			local += argumentReolvers[i].localSize(); // move to the next argument
 		}
-		
+
 		mv.visitVarInsn(ALOAD, contextIndex); // load the context
-		
+
 		if( isStatic)
 			mv.visitMethodInsn(INVOKESTATIC, className, methodName, newMethod.getDescriptor()); // ... = foo( ...
 		else
 			mv.visitMethodInsn(INVOKEVIRTUAL, className, methodName, newMethod.getDescriptor()); // ... = foo( ...
 
-		if( returnReolver != null) 
+		if( returnReolver != null)
 			mv.visitVarInsn(returnReolver.storeCode(), resultIndex); // result = ...
-		
+
 		mv.visitLabel(l1);
 		Label l12 = new Label();
 		mv.visitJumpInsn(GOTO, l12);
@@ -235,7 +235,7 @@ public class AtomicMethod extends MethodAdapter{
 		Label l28 = new Label();
 		mv.visitLabel(l28);
 		mv.visitJumpInsn(GOTO, l12);
-		
+
 		/*catch( TransactionException ex)
 		{
 			commit = false;
@@ -249,7 +249,7 @@ public class AtomicMethod extends MethodAdapter{
 		Label l14 = new Label();
 		mv.visitLabel(l14);
 		mv.visitJumpInsn(GOTO, l12);
-		
+
 		/*catch( Throwable ex)
 		{
 			throwable = ex;
@@ -260,7 +260,7 @@ public class AtomicMethod extends MethodAdapter{
 		mv.visitLabel(l15);
 		mv.visitVarInsn(ALOAD, exceptionIndex);
 		mv.visitVarInsn(ASTORE, throwableIndex);
-		
+
 		/*
 		 * if( commit )
 			{
@@ -272,7 +272,7 @@ public class AtomicMethod extends MethodAdapter{
 			}
 			else
 			{
-				context.rollback(); 
+				context.rollback();
 				commit = true;
 			}
 		 */
@@ -280,14 +280,14 @@ public class AtomicMethod extends MethodAdapter{
 		mv.visitVarInsn(ILOAD, commitIndex);
 		Label l16 = new Label();
 		mv.visitJumpInsn(IFEQ, l16);
-		
+
 		Label l17 = new Label(); // if( context.commit())
 		mv.visitLabel(l17);
 		mv.visitVarInsn(ALOAD, contextIndex);
 		mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "commit", "()Z");
 		Label l18 = new Label();
 		mv.visitJumpInsn(IFEQ, l18);
-		
+
 		//		if( throwable != null)
 		//			throw throwable;
 		Label l19 = new Label();
@@ -299,7 +299,7 @@ public class AtomicMethod extends MethodAdapter{
 		mv.visitLabel(l21);
 		mv.visitVarInsn(ALOAD, throwableIndex);
 		mv.visitInsn(ATHROW);
-		
+
 		// return
 		mv.visitLabel(l20);
 		if( returnReolver == null) {
@@ -309,26 +309,26 @@ public class AtomicMethod extends MethodAdapter{
 			mv.visitVarInsn(returnReolver.loadCode(), resultIndex); // return result;
 			mv.visitInsn(returnReolver.returnCode());
 		}
-		
+
 		mv.visitJumpInsn(GOTO, l18);
-		
+
 		// else
-		mv.visitLabel(l16); // context.rollback(); 
+		mv.visitLabel(l16); // context.rollback();
 		mv.visitVarInsn(ALOAD, contextIndex);
 		mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "rollback", "()V");
-		
+
 		mv.visitInsn(ICONST_1); // commit = true;
 		mv.visitVarInsn(ISTORE, commitIndex);
-		
-		mv.visitLabel(l18);  // for( ... ; i>0 ; --i) 
+
+		mv.visitLabel(l18);  // for( ... ; i>0 ; --i)
 		mv.visitIincInsn(indexIndex, -1);
 		mv.visitLabel(l10);
 		mv.visitVarInsn(ILOAD, indexIndex);
 		mv.visitJumpInsn(IFGT, l11);
-		
+
 		// throw new TransactionException("Failed to commit ...");
 		Label l23 = throwTransactionException();
-		
+
 		/* locals */
 		Label l24 = new Label();
 		mv.visitLabel(l24);
@@ -341,7 +341,7 @@ public class AtomicMethod extends MethodAdapter{
 		mv.visitLocalVariable("ex", "Lorg/deuce/transaction/AbortTransactionException;", null, l27, l28, exceptionIndex);
 		mv.visitLocalVariable("ex", "Lorg/deuce/transaction/TransactionException;", null, l13, l14, exceptionIndex);
 		mv.visitLocalVariable("ex", "Ljava/lang/Throwable;", null, l15, l12, exceptionIndex);
-		
+
 		mv.visitMaxs(6 + variablesSize, resultIndex + 2);
 		mv.visitEnd();
 	}

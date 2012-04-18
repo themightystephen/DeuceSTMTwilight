@@ -2,14 +2,14 @@ package org.deuce.transform.core.method;
 
 import java.util.List;
 
-import org.deuce.objectweb.asm.MethodAdapter;
 import org.deuce.objectweb.asm.MethodVisitor;
+import org.deuce.objectweb.asm.Opcodes;
 import org.deuce.objectweb.asm.Type;
 import org.deuce.transform.commons.Field;
 
 import static org.deuce.objectweb.asm.Opcodes.*;
 
-public class StaticMethodTransformer extends MethodAdapter {
+public class StaticMethodTransformer extends MethodVisitor {
 
 	final static public String CLASS_BASE = "__CLASS_BASE__";
 
@@ -21,7 +21,7 @@ public class StaticMethodTransformer extends MethodAdapter {
 
 	public StaticMethodTransformer(MethodVisitor mv, MethodVisitor staticMethod, List<Field> fields,
 			String staticField, String className, String fieldsHolderName) {
-		super(mv);
+		super(Opcodes.ASM4,mv);
 		this.staticMethod = staticMethod;
 		this.fields = fields;
 		this.staticField = staticField;

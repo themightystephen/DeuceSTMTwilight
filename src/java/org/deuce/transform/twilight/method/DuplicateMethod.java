@@ -1,8 +1,8 @@
 package org.deuce.transform.twilight.method;
 
 import org.deuce.objectweb.asm.Label;
-import org.deuce.objectweb.asm.MethodAdapter;
 import org.deuce.objectweb.asm.MethodVisitor;
+import org.deuce.objectweb.asm.Opcodes;
 import org.deuce.objectweb.asm.Type;
 import org.deuce.objectweb.asm.commons.AnalyzerAdapter;
 import org.deuce.objectweb.asm.commons.Method;
@@ -34,7 +34,7 @@ import static org.deuce.objectweb.asm.Opcodes.*;
  *
  * @author Guy Korland
  */
-public class DuplicateMethod extends MethodAdapter {
+public class DuplicateMethod extends MethodVisitor {
 
 	final static public String LOCAL_VARIABLE_NAME = "__transactionContext__";
 
@@ -47,7 +47,7 @@ public class DuplicateMethod extends MethodAdapter {
 	private AnalyzerAdapter analyzerAdapter;
 
 	public DuplicateMethod(MethodVisitor mv, boolean isstatic, Method newMethod, FieldsHolder fieldsHolder) {
-		super(mv);
+		super(Opcodes.ASM4,mv);
 		this.fieldsHolder = fieldsHolder;
 		this.argumentsSize = Util.calcArgumentsSize( isstatic, newMethod);
 	}
