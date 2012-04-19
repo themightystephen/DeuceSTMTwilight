@@ -21,6 +21,7 @@ import java.util.logging.Logger;
 
 import org.deuce.objectweb.asm.ClassReader;
 import org.deuce.objectweb.asm.ClassWriter;
+import org.deuce.objectweb.asm.Opcodes;
 import org.deuce.objectweb.asm.util.TraceClassVisitor;
 import org.deuce.reflection.UnsafeHolder;
 import org.deuce.transaction.Context;
@@ -30,6 +31,7 @@ import org.deuce.transform.commons.BaseClassTransformer;
 import org.deuce.transform.commons.Exclude;
 import org.deuce.transform.commons.ExcludeIncludeStore;
 import org.deuce.transform.commons.FramesCodeVisitor;
+import org.deuce.transform.twilight.IdentifyExcludedClassVisitor;
 
 /**
  * A java agent to dynamically instrument transactional supported classes/
@@ -175,17 +177,26 @@ public class Agent implements ClassFileTransformer {
 		throws IllegalClassFormatException {
 			List<ClassByteCode> classesWithBytecode = new ArrayList<ClassByteCode>(); // a single .class file can become multiple when in offline mode. Additional .class files are created to hold synthetic fields. 95% sure this is NOT done during online instrumentation.
 
-			// if the class name starts with a $ or it is in the pre-defined excluded set, then perform no transformation; put the bytecode into the output untransformed (this implies that classes marked with @Exclude will still be "transformed" but not really transformed...in that, they are put through the transformer but if the transformer finds that they're annotated with @Exclude then it does effectively nothing to the classfile)
-			if (className.startsWith("$") || ExcludeIncludeStore.exclude(className)){
+			// RETURN CLASS UNTRANSFORMED IF EXCLUDED
+			ClassReader cr1 = new ClassReader(classfileBuffer);
+			IdentifyExcludedClassVisitor eav = new IdentifyExcludedClassVisitor(Opcodes.ASM4);
+			cr1.accept(eav, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+
+			// return classfile untransformed if class name starts with $ OR class is in pre-defined exclusion set OR class is marked with @Exclude annotation OR class is an annotation type (latter two are performed by the visitor above)
+			boolean excluded = className.startsWith("$") || ExcludeIncludeStore.exclude(className) || eav.isClassExcluded();
+			if(excluded) {
 				classesWithBytecode.add(new ClassByteCode(className, classfileBuffer));
-				System.out.println("Class "+className+" is in predefined exclude set.");
+				System.out.println("Class "+className+" is in predefined exclude set OR is annotated with @Exclude.");
 				return classesWithBytecode;
 			}
+
+			// OUTPUT DEBUG INFORMATION
 			System.out.println("Transforming class "+className+" (i.e. NOT excluded).");
 
 			if (logger.isLoggable(Level.FINER))
 				logger.finer("Transforming: Class=" + className);
 
+			// PERFORM TRANSFORMATION
 			// Reads the bytecode and calculate the frames, to support 1.5- code.
 			classfileBuffer = addFrames(className, classfileBuffer);
 

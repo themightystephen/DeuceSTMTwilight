@@ -39,7 +39,7 @@ public class ExternalFieldsHolderClass implements FieldsHolder {
 		String superFieldHolder = ExcludeIncludeStore.exclude(superName) ? "java/lang/Object" : getFieldsHolderName(superName);
 		classWriter.visit(Opcodes.V1_6, Opcodes.ACC_PUBLIC + Opcodes.ACC_SUPER,
 				this.className, null, superFieldHolder, null);
-		classWriter.visitAnnotation(ClassTransformer.EXCLUDE_DESC, false);
+		classWriter.visitAnnotation(IdentifyExcludedClassVisitor.EXCLUDE_DESC, false);
 		extStaticInitVisitor = new ExternalStaticInitialiserVisitor(classWriter.visitMethod(Opcodes.ACC_STATIC, "<clinit>", "()V", null, null));
 		extStaticInitVisitor.visitCode();
 	}

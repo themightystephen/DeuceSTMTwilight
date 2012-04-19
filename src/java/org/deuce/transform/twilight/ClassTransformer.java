@@ -1,9 +1,7 @@
 package org.deuce.transform.twilight;
 
-import java.lang.annotation.Annotation;
 import java.util.LinkedList;
 
-import org.deuce.objectweb.asm.AnnotationVisitor;
 import org.deuce.objectweb.asm.ClassVisitor;
 import org.deuce.objectweb.asm.FieldVisitor;
 import org.deuce.objectweb.asm.MethodVisitor;
@@ -54,13 +52,10 @@ import org.deuce.transform.twilight.method.StaticInitialiserTransformer;
 public class ClassTransformer extends BaseClassTransformer implements FieldsHolder{
 	final private static String ENUM_DESC = Type.getInternalName(Enum.class);
 
-	private boolean exclude = false;
 	private boolean visitclinit = false;
 	final private LinkedList<Field> syntheticAddressFields = new LinkedList<Field>();
 	private String staticField = null; // non-null value indicates we need to add __CLASS_BASE__ to instrumented class (see StaticInitialiserTransformer)
 
-	final static public String EXCLUDE_DESC = Type.getDescriptor(Exclude.class);
-	final static private String ANNOTATION_NAME = Type.getInternalName(Annotation.class);
 	private boolean isInterface;
 	private boolean isEnum;
 	private MethodVisitor staticInitialiserVisitor;
@@ -87,27 +82,8 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 		isInterface = (access & Opcodes.ACC_INTERFACE) != 0;
 		isEnum = ENUM_DESC.equals(superName);
 
-		for(String inter : interfaces){
-			// if the class is an Annotation type, then exclude from transformation (see http://docs.oracle.com/javase/1.5.0/docs/api/java/lang/annotation/Annotation.html)
-			if( inter.equals(ANNOTATION_NAME)){
-				exclude = true;
-				break;
-			}
-		}
-
 		// visit class header as normal (TODO: we call visit on super here, ByteCodeVisitor, but all it does is something very simple that doesn't really need to be done there; it could just be done directly here)
 		super.visit(version, access, name, signature, superName, interfaces);
-	}
-
-	/**
-	 * Checks if the class is marked as {@link Exclude @Exclude}
-	 */
-	@Override
-	public AnnotationVisitor visitAnnotation( String desc, boolean visible) {
-		// if not excluded already, exclude if annotation descriptor is @Exclude
-		System.out.println("visited class annotation "+desc+" in class "+className); //TODO: remove this later
-		exclude = exclude ? exclude : EXCLUDE_DESC.equals(desc);
-		return super.visitAnnotation(desc, visible);
 	}
 
 	/**
@@ -115,12 +91,8 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 	 * The field will be statically initialized to hold the field address.
 	 */
 	@Override
-	public FieldVisitor visitField(int access, String name, String desc, String signature,
-			Object value) {
+	public FieldVisitor visitField(int access, String name, String desc, String signature, Object value) {
 		FieldVisitor fieldVisitor = super.visitField(access, name, desc, signature, value);
-		// if the class is on exclude list, then obviously no transformations to be done, just return
-		if(exclude)
-			return fieldVisitor;
 
 		// define synthetic "address" field as constant (i.e. static final)
 		String addressFieldName = Util.getAddressField(name);
@@ -150,13 +122,8 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 	}
 
 	@Override
-	public MethodVisitor visitMethod(final int access, String name, String desc, String signature,
-			String[] exceptions) {
+	public MethodVisitor visitMethod(final int access, String name, String desc, String signature, String[] exceptions) {
 		MethodVisitor originalMethodVisitor =  super.visitMethod(access, name, desc, signature, exceptions);
-
-		// again, if the class is on exclude list, return without performing any transformations (TODO: e.g. synthetic methods...?)
-		if(exclude)
-			return originalMethodVisitor;
 
 		// if method is native, create synthetic method that calls original method
 		final boolean isNative = (access & Opcodes.ACC_NATIVE) != 0;
@@ -194,33 +161,31 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 
 	@Override
 	public void visitEnd() {
-		// again, assuming this class is not on the exclude list
-		if(!exclude){
-			// add @Exclude annotation to transformed class (to stop (remote) possibility of getting transformed again!)
-			super.visitAnnotation(EXCLUDE_DESC, false);
+		// add @Exclude annotation to transformed class (to stop possibility of transformed class getting transformed again!)
+		super.visitAnnotation(IdentifyExcludedClassVisitor.EXCLUDE_DESC, false);
 
-			// if no static initialiser existed before or created yet, create one (TODO: did he mean 'static method' here, or did he mean 'static initialiser method'?)
-			// creates a new (essentially empty) <clinit> if we haven't see one already
-			if(syntheticAddressFields.size() > 0 && !visitclinit) {
-				//TODO avoid creating new static method in case of external fields holder
-				visitclinit = true;
-				MethodVisitor method = visitMethod(Opcodes.ACC_STATIC, "<clinit>", "()V", null, null);
-				method.visitCode();
-				method.visitInsn(Opcodes.RETURN);
-				method.visitMaxs(100, 100); // TODO set the right value
-				method.visitEnd();
-			}
-			if(isEnum){ // Build a dummy ordinal() method
-				MethodVisitor ordinalMethod =
-					super.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_SYNTHETIC, "ordinal", "(Lorg/deuce/transaction/Context;)I", null, null);
-				ordinalMethod.visitCode();
-				ordinalMethod.visitVarInsn(Opcodes.ALOAD, 0);
-				ordinalMethod.visitMethodInsn(Opcodes.INVOKEVIRTUAL, className, "ordinal", "()I");
-				ordinalMethod.visitInsn(Opcodes.IRETURN);
-				ordinalMethod.visitMaxs(1, 2);
-				ordinalMethod.visitEnd();
-			}
+		// if no static initialiser existed before or created yet, create one (TODO: did he mean 'static method' here, or did he mean 'static initialiser method'?)
+		// creates a new (essentially empty) <clinit> if we haven't see one already
+		if(syntheticAddressFields.size() > 0 && !visitclinit) {
+			//TODO avoid creating new static method in case of external fields holder
+			visitclinit = true;
+			MethodVisitor method = visitMethod(Opcodes.ACC_STATIC, "<clinit>", "()V", null, null);
+			method.visitCode();
+			method.visitInsn(Opcodes.RETURN);
+			method.visitMaxs(100, 100); // TODO set the right value
+			method.visitEnd();
 		}
+		if(isEnum){ // Build a dummy ordinal() method
+			MethodVisitor ordinalMethod =
+				super.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_SYNTHETIC, "ordinal", "(Lorg/deuce/transaction/Context;)I", null, null);
+			ordinalMethod.visitCode();
+			ordinalMethod.visitVarInsn(Opcodes.ALOAD, 0);
+			ordinalMethod.visitMethodInsn(Opcodes.INVOKEVIRTUAL, className, "ordinal", "()I");
+			ordinalMethod.visitInsn(Opcodes.IRETURN);
+			ordinalMethod.visitMaxs(1, 2);
+			ordinalMethod.visitEnd();
+		}
+
 		super.visitEnd();
 		fieldsHolder.close();
 	}
