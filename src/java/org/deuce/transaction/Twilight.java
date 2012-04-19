@@ -54,6 +54,24 @@ import org.deuce.transform.twilight.method.StaticInitialiserTransformer;
  *
  * @author Stephen Tuttlebee
  */
+
+/*
+ * Since all calls to ANY method within an Atomic method will be modified in the instrumentation
+ * process to also pass the Context as a parameter, that means that calls to the Twilight API
+ * methods will also have this done to them (except for calls to the Twilight API which do not
+ * occur inside an Atomic method, but that would only happen when the programmer misbehaves).
+ *
+ * This means I need to ensure that not just any method call has the Context passed as well -
+ * calls to methods within the org.deuce.transaction.Twilight class should be left as is since
+ * they are essentially calls into the STM system and obviously the STM system itself does
+ * not need to be tracked.
+ *
+ * NOTE: the possibility of requiring the programming to pass the Context has two drawbacks.
+ * One, it would make the programming interface horrible, and two, it wouldn't work because
+ * during instrumentation we would have the same problem, with an extra Context argument
+ * being added to each of *those* calls.
+ */
+
 @Exclude
 public class Twilight {
 	private static final TwilightContext context = TwilightContextDelegator.getInstance();

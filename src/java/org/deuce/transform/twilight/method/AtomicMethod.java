@@ -76,7 +76,7 @@ public class AtomicMethod extends MethodVisitor {
 		final AnnotationVisitor av = super.visitAnnotation(desc, visible);
 
 		if(MethodTransformer.ATOMIC_DESCRIPTOR.equals(desc)) {
-			return new AnnotationVisitor(Opcodes.ASM4) {
+			return new AnnotationVisitor(Opcodes.ASM4,av) {
 				public void visit(String name, Object value) {
 					// retries
 					if(name.equals(ATOMIC_ANNOTATION_NAME_RETRIES))

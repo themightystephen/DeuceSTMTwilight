@@ -18,8 +18,8 @@ import static org.deuce.objectweb.asm.Opcodes.*;
  * Responsible for creating the mirror version for the original
  * method that includes instrumentation.
  *
- * This duplication should occur for ALL methods, whether annotated with TwilightAtomic
- * or not.
+ * This duplication should occur for ALL methods, whether they are annotated with
+ * Atomic or not.
  *
  * i.e. all direct field accesses are transformed into call into Context API (via the
  * ContextDelegator class). It also deals with accesses to array elements equally
@@ -35,8 +35,8 @@ import static org.deuce.objectweb.asm.Opcodes.*;
  * @author Guy Korland
  */
 public class DuplicateMethod extends MethodVisitor {
-
 	final static public String LOCAL_VARIABLE_NAME = "__transactionContext__";
+	private static final String TWILIGHT_API_CLASS = "org/deuce/transaction/Twilight"; // to stop instrumentation of API method calls
 
 	private final int argumentsSize;
 	private final FieldsHolder fieldsHolder;
@@ -65,7 +65,11 @@ public class DuplicateMethod extends MethodVisitor {
 	 */
 	@Override
 	public void visitMethodInsn(int opcode, String owner, String name, String desc) {
-		if(ExcludeIncludeStore.exclude(owner)) {
+		// NOTE: do NOT just put org/deuce/transaction/Twilight into the default exclude set, since that set could be overriden by the user at the command-line
+		// NOTE: even if I get around the problem of the default being overriden, I still can't just add Twilight class into exclude tree in ExcludeIncludeStore because it could get re-added by the user using the 'include set' option at the command-line
+
+		// if in method's owning class is in the user-defined 'exclude set' OR is a Twilight API call; TODO: think about whether we should have both a pre-defined exclude set of things we KNOW should always be excluded (such as Twilight class and the whole deuce framework for that matter) AND a user-defined set that goes on top of that...I suppose we could allow the user to have deuce package in their 'include set' if they want to. It would be an odd thing to do but we should still let them do it...
+		if(ExcludeIncludeStore.exclude(owner) || owner.equals(TWILIGHT_API_CLASS)) {
 			// call uninstrumented method
 			super.visitMethodInsn(opcode, owner, name, desc); // ... = foo( ...
 		}

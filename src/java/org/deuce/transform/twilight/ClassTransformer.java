@@ -105,6 +105,7 @@ public class ClassTransformer extends BaseClassTransformer implements FieldsHold
 	@Override
 	public AnnotationVisitor visitAnnotation( String desc, boolean visible) {
 		// if not excluded already, exclude if annotation descriptor is @Exclude
+		System.out.println("visited class annotation "+desc+" in class "+className); //TODO: remove this later
 		exclude = exclude ? exclude : EXCLUDE_DESC.equals(desc);
 		return super.visitAnnotation(desc, visible);
 	}

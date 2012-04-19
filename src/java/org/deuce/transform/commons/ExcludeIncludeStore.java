@@ -29,6 +29,10 @@ public class ExcludeIncludeStore {
 		excludeIncludeStore.excludeClass.add(AbortTransactionException.ABORT_TRANSACTION_EXCEPTION_INTERNAL);
 	}
 
+	/*
+	 * TODO: we should ALWAYS have deuce packages in the exclude set. This would mean we don't have to annotate all the deuce classes with @Exclude individually, which can be error-prone since you can forget to do so when introducing new classes.
+	 * The deuce package should be unique in general...the liklihood that someone has a project which IS the deuce project which they wish to run transactionally is very low. However, leave the possibility open by giving the user the ability to add the deuce packages to the 'include set'.
+	 */
 
 	private ExcludeIncludeStore(){
 
