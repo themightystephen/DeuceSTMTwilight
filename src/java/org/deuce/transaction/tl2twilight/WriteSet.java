@@ -65,9 +65,10 @@ public class WriteSet{
 			@Override
 			public boolean execute(WriteFieldAccess writeField) {
 				int hashCode = writeField.hashCode();
-				System.out.println("about to try to reserve a field");
+//				System.out.println("about to try to reserve a field");
+				// if self-locked/reserved already, then no need to add hashCode to the reservedSet (since the clashing field has already reserved/locked our shared versioned-lock)
 				if(LockManager.reserve(hashCode, locksMarker)) {
-					System.out.println("reserved a field");
+//					System.out.println("reserved a field");
 					reservedSet.add(hashCode);
 				}
 				return true;
@@ -82,6 +83,7 @@ public class WriteSet{
 		reservedSet.forEach(new TIntProcedure() {
 			@Override
 			public boolean execute(int hashCode) {
+				// if self-locked/reserved already, then no need to add hashCode to the lockedSet (since the clashing field has already reserved/locked our shared versioned-lock)
 				if(LockManager.lock(hashCode, locksMarker)) {
 					lockedSet.add(hashCode);
 				}

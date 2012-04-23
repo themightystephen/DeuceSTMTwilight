@@ -71,34 +71,37 @@ public class LockManager {
 	 * throws an exception on failure to reserve (due to the field having already been reserved or locked by another transaction)
 	 */
 	public static boolean reserve(int lockIndex, byte[] contextLocks) {
-		System.out.println("lock index given is "+lockIndex);
+//		System.out.println("lock index given is "+lockIndex);
 		final int lock = locks.get(lockIndex);
 
 		final int selfLockIndex = lockIndex >>> DIVIDE_8;
-		System.out.println("selfLockIndex: "+selfLockIndex);
+//		System.out.println("selfLockIndex: "+selfLockIndex);
 		final byte selfLockByte = contextLocks[selfLockIndex];
-		System.out.println("selfLockByte: "+selfLockByte);
+//		System.out.println("selfLockByte: "+selfLockByte);
 		final byte selfLockBit = (byte)(1 << (lockIndex & MODULO_8));
 
 		// if already locked or reserved
-		System.out.println("lock (as binary string) = "+Integer.toBinaryString(lock));
+		System.out.println(Thread.currentThread()+" [reserving] Versioned-lock (as binary string) = "+Integer.toBinaryString(lock));
 		if( (lock & LOCK_MASK) != FREE) {
 			// if we have a case of self-locking, return false to indicate so
 			if((selfLockByte & selfLockBit) != 0)
 				return false;
 			// otherwise throw an exception
+			System.out.println(Thread.currentThread()+" Throwing exception on attempt to reserve a field");
 			throw FAILURE_EXCEPTION;
 		}
 
 		// attempt to set lock as reserved atomically; throw exception if the CAS fails
 		boolean isReserved = locks.compareAndSet(lockIndex, lock, lock | RESERVED);
-		System.out.println("lock after reserved (as binary string)"+Integer.toBinaryString(locks.get(lockIndex)));
-		if(!isReserved)
+		if(!isReserved) {
+			System.out.println(Thread.currentThread()+" Throwing exception on attempt to reserve a field (2)");
 			throw FAILURE_EXCEPTION;
+		}
+		System.out.println(Thread.currentThread()+" [reserving] Versioned-lock after reserved (as binary string)"+Integer.toBinaryString(locks.get(lockIndex)));
 
 		// mark in self locks
 		contextLocks[selfLockIndex] |= selfLockBit;
-		System.out.println("self lock after marked: "+Integer.toBinaryString(contextLocks[selfLockIndex]));
+//		System.out.println("self lock after marked: "+Integer.toBinaryString(contextLocks[selfLockIndex]));
 
 		// reservation successful
 		return true;
@@ -115,16 +118,22 @@ public class LockManager {
 		final byte selfLockByte = contextLocks[selfLockIndex];
 		final byte selfLockBit = (byte)(1 << (lockIndex & MODULO_8));
 
-		if( (lock & LOCK_MASK) == LOCKED) {  //is already locked?
+		System.out.println(Thread.currentThread()+" [locking] Versioned-lock (as binary string) = "+Integer.toBinaryString(lock));
+		if( (lock & LOCK_MASK) == LOCKED) {  //is already locked? [I think this should never happen, since once a field is reserved, only the reserving transaction is allowed to lock it]
 			if( (selfLockByte & selfLockBit) != 0) // check for self locking
 				return false;
+			System.out.println(Thread.currentThread()+" Throwing exception on attempt to lock a field");
 			throw FAILURE_EXCEPTION;
 		}
 
 		// attempt to set lock as locked atomically; throw exception if the CAS fails
 		boolean isLocked = locks.compareAndSet(lockIndex, lock, lock | LOCKED);
-		if(!isLocked)
+		if(!isLocked) {
+			System.out.println(Thread.currentThread()+" Throwing exception on attempt to lock a field (2)");
 			throw FAILURE_EXCEPTION;
+		}
+
+		System.out.println(Thread.currentThread()+" [locking] Versioned-lock after locked (as binary string) = "+Integer.toBinaryString(locks.get(lockIndex)));
 
 		// mark in self locks
 		contextLocks[selfLockIndex] |= selfLockBit;
@@ -152,19 +161,22 @@ public class LockManager {
 	 */
 	// throws a TransactionException if lock is held or if the versioned-lock value exceeds the given clock value (i.e. the object/field associated with the lock has been modified since the given clock value)
 	public static int checkLock(int lockIndex, int clock) {
-		System.out.println("Checking lock with index "+lockIndex+"; start time of transaction was "+clock);
+//		System.out.println("Checking lock with index "+lockIndex+"; start time of transaction was "+clock);
 		int versionedLock = locks.get(lockIndex);
-		System.out.println("Contents of versioned-lock with that index is: "+Integer.toBinaryString(versionedLock));
+//		System.out.println("Contents of versioned-lock with that index is: "+Integer.toBinaryString(versionedLock));
 
-		System.out.println("LOCK MASK is: "+Integer.toBinaryString(LOCK_MASK));
-		System.out.println("VERS MASK is: "+Integer.toBinaryString(VERSION_MASK));
+//		System.out.println("LOCK MASK is: "+Integer.toBinaryString(LOCK_MASK));
+//		System.out.println("VERS MASK is: "+Integer.toBinaryString(VERSION_MASK));
 		// if clock < timestamp/version of versioned-lock || versioned-lock is marked as locked (NOTE: it is okay for the lock to be reserved; reserved fields may still have concurrent read accesses)
 		if( clock < (versionedLock & VERSION_MASK) || (versionedLock & LOCK_MASK) == LOCKED) {
-			System.out.println("failure in checking lock");
+			// TODO: debug this bit to find out which of the above conditions is continually not holding (on some runs).
+			System.out.println(Thread.currentThread()+" Throwing exception on checkLock() of field (1)");
+			System.out.println(Thread.currentThread()+" Clock less than version of field?: "+(clock < (versionedLock & VERSION_MASK)));
+			System.out.println(Thread.currentThread()+" Versioned-lock is LOCKED?: "+((versionedLock & LOCK_MASK) == LOCKED));
 			throw FAILURE_EXCEPTION;
 		}
 
-		System.out.println("success in checking lock");
+//		System.out.println("success in checking lock");
 		return versionedLock;
 	}
 
@@ -183,8 +195,11 @@ public class LockManager {
 		int versionedLock = locks.get(lockIndex);
 
 		// if versioned-lock bits are not the same as given by expected || clock < timestamp/version of versioned-lock || versioned-lock is marked as locked (NOTE: it is okay for the lock to be reserved; reserved fields may still have concurrent read accesses)
-		if( versionedLock != expected || clock < (versionedLock & VERSION_MASK) || (versionedLock & LOCK_MASK) == LOCKED)
+		if( versionedLock != expected || clock < (versionedLock & VERSION_MASK) || (versionedLock & LOCK_MASK) == LOCKED) {
+			System.out.println(Thread.currentThread()+" Throwing exception on checkLock() of field (2)");
 			throw FAILURE_EXCEPTION;
+		}
+
 	}
 
 	/**
@@ -199,7 +214,10 @@ public class LockManager {
 		int versionedLock = locks.get(lockIndex);
 		int unlockedValue = versionedLock & FREE;
 		int versionValue = versionedLock & VERSION_MASK;
+		System.out.println(Thread.currentThread()+" Lock part: "+Integer.toBinaryString(unlockedValue));
+		System.out.println(Thread.currentThread()+" Vers part: "+Integer.toBinaryString(versionValue));
 		locks.set(lockIndex, versionValue | unlockedValue);
+		System.out.println();
 
 		clearSelfLock(lockIndex, contextLocks);
 	}
@@ -214,7 +232,10 @@ public class LockManager {
 	 */
 	public static void setAndReleaseLock( int lockIndex, int newClock, byte[] contextLocks){
 //		int lockIndex = hash; // was: int lockIndex = hash & MASK;
+//		System.out.println(Thread.currentThread()+" Set clock/version and release lock");
+//		System.out.println(Thread.currentThread()+" Versioned-lock before: "+Integer.toBinaryString(locks.get(lockIndex)));
 		locks.set(lockIndex, newClock); // was: locks.set(lockIndex, newClock);
+//		System.out.println(Thread.currentThread()+" Versioned-lock after:: "+Integer.toBinaryString(locks.get(lockIndex)));
 
 		clearSelfLock(lockIndex, contextLocks);
 	}

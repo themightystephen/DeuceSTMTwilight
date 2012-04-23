@@ -180,10 +180,7 @@ final public class Context implements TwilightContext {
 	 * ENTERING AND EXITING THE TWILIGHT ZONE
 	 * ***************************************/
 	/**
-	 * <p>Twilight-specific method/operation. First phase of commit before twilight zone.
-	 * (this won't be called by the programmer directly; the instrumentation process will
-	 * do some magic to change whatever the programmer writes (which I haven't determined
-	 * precisely yet) into bytecode which calls this method at the appropriate moment.</p>
+	 * <p>Twilight-specific method/operation. First phase of commit before twilight zone.</p>
 	 *
 	 * <p>This method actually does a lot of stuff in common with the standard TL2; the
 	 * bit done in this method is to first reserve the writeset and then to validate
@@ -202,8 +199,7 @@ final public class Context implements TwilightContext {
 	 * bail out or otherwise (and if we find at the end of the finalize commit phase that
 	 * the readset inconsistencies have not been resolved, then we we restart the Tx).</p>
 	 *
-	 * @return <code>true</code> if the readset is consistent (or write-set is empty),
-	 * <code>false</code> otherwise
+	 * @return <code>true</code> if the readset is consistent, <code>false</code> otherwise
 	 */
 	@Override
 	public boolean prepareCommit() {
@@ -213,70 +209,80 @@ final public class Context implements TwilightContext {
 //			return true;
 //		}
 //	    else {
-	    	// reserve the transactional variables in the write set (can throw TransactionException if some fields in write set are LOCKED -- TODO: check this)
-			System.out.println("About to try reserving write set");
-			writeSet.reserve();
-			System.out.println("Succeeded in reserving write set");
+
+			// reserve the transactional variables in the write set (can throw TransactionException if some fields in write set are LOCKED -- TODO: check this)
+			System.out.println(Thread.currentThread()+" About to try reserving write set");
+			// exception can occur if not able to reserve all the write set locks
+			writeSet.reserve(); // if reservation fails, then transaction is automatically restarted (by relying on exception mechanism in instrumented atomic method to call context.rollback())
+			System.out.println(Thread.currentThread()+" Succeeded in reserving write set");
 			// validate the transactional variables in the read set
 			return validate();
 //	    }
 	}
 
+	/**
+	 * @return <code>true</code> if the readset is consistent, <code>false</code> otherwise
+	 */
 	@Override
 	public boolean finalizeCommit() {
 		try {
-			// if read set still inconsistent even after Twilight zone, throw TransactionException to cause transaction to restart
+			// return false if read set still inconsistent even after Twilight zone
 			if(state != ReadSetState.CONSISTENT) {
-				System.out.println("inconsistent??");
+				System.out.println(Thread.currentThread()+" Readset found to be inconsistent at the start of finalizeCommit");
 				return false;
-				//throw new TransactionException("Unresolved readset inconsistencies on finalization of commit.");
 			}
 			// otherwise, read set was consistent and we can publish write set (performing necessary locking and unlocking to do so)
-			System.out.println("About to try locking write set");
+			System.out.println(Thread.currentThread()+" About to try locking write set");
 			writeSet.lock();
-			System.out.println("Succeeded in locking write set");
+			System.out.println(Thread.currentThread()+" Succeeded in locking write set");
 			writeSet.publishAndUnlock();
-			System.out.println("Succeeded in publishing and unlocking write set");
+			System.out.println(Thread.currentThread()+" Succeeded in publishing and unlocking write set");
+			System.out.println("SUCCESSFUL COMMIT");
 			return true;
 		}
-		// if locking fails [can it? We reserved it already...]
+		// unreserve writeset if readset is inconsistent...
+		// also return false if locking of the writeset fails for some STRANGE reason
+		// (I don't think writeSet.lock() can fail since we reserved writeset already and so we should be able to lock unhindered by other transactions... -- one transaction cannot reserve (and afterwards lock) a field that has already been reserved)
 		catch(TransactionException ex) {
+			writeSet.unlock();
 			return false;
+		}
+		finally {
+			// set irrevocable state appropriately and also release appropriate locks (this is always run before returning)
+			if(irrevocableState) {
+				irrevocableState = false;
+				irrevocableAccessLock.writeLock().unlock();
+			}
+			else {
+				irrevocableAccessLock.readLock().unlock();
+			}
 		}
 	}
 
 	/**
-	 * @return boolean <code>true</code> if commit was successful, <code>false</code> if unsuccessful and a restart is required
+	 * @return boolean <code>true</code> if commit was successful (readset was consistent and writeset was successfully
+	 * reserved and locked and written to memory), <code>false</code> otherwise. In the latter case, the instrumented
+	 * atomic method's retry loop will kick into action, causing a restart of the transaction.
 	 */
 	@Override
 	public boolean commit() {
-		System.out.println("Transaction (with context xxx) has called tl2twilight.Context.commit()");
+		System.out.println(Thread.currentThread()+" Start of commit()");
 		try {
 			prepareCommit();
-			System.out.println("Got past prepareCommit() inside commit()");
-			finalizeCommit();
-			System.out.println("Got past finalizeCommit() inside commit()");
+			return finalizeCommit(); // returns false if readset inconsistencies
 		}
-		catch(TransactionException exception){
-			// exception is either due to not being able to reserve all the write set locks in prepareCommit(),
-			// or because the read set was still inconsistent after the twilight zone in finalizeCommit()
+		// failed to reserve writeset during prepareCommit() (returning false will cause the atomic method's retry loop to iterate again)
+		catch(TransactionException ex) {
+			writeSet.unlock();
 			return false;
 		}
-		// clean-up code to set irrevocable state appropriately and also release appropriate locks (this is always run before returning)
-		finally {
-			if(irrevocableState){
-				irrevocableState = false;
-				irrevocableAccessLock.writeLock().unlock();
-			}
-			else{
-				irrevocableAccessLock.readLock().unlock();
-			}
-		}
-		return true;
 	}
 
 	@Override
 	public void rollback() {
+		// unreserve/unlock writeset entries so other transactions can read/write fields
+		writeSet.unlock();
+		// release irrevocableAccessLock read lock (read lock since any transaction holding the write lock WILL NEVER rollback)
 		irrevocableAccessLock.readLock().unlock();
 
 		// lazy version management means that no undo is necessary
@@ -331,7 +337,7 @@ final public class Context implements TwilightContext {
 		}
 		catch(TransactionException e) {
 			state = ReadSetState.INCONSISTENT;
-			System.out.println("validating found readset to be inconsistent");
+//			System.out.println("validating found readset to be inconsistent");
 			return false;
 		}
 		return true;
@@ -579,11 +585,12 @@ final public class Context implements TwilightContext {
 		// construct new ReadFieldAccess and store temporarily in currentReadFieldAccess
 		ReadFieldAccess readEntry = new ReadFieldAccess(obj, field);
 		currentReadFieldAccess = readEntry;
-		System.out.println(currentReadFieldAccess.hashCode());
-//		System.out.println("Hashcode of ReadFieldAccess with owner object "+obj+" and field "+field+" is "+currentReadFieldAccess.hashCode());
+//		System.out.println(currentReadFieldAccess.hashCode());
+		System.out.println(Thread.currentThread()+" Hashcode of ReadFieldAccess with owner object "+obj+" and field "+field+" is "+currentReadFieldAccess.hashCode());
 
 		// Check the read is valid (PRE-VALIDATION step described in the thesis on p32)
 		preValidationReadVersionedLock = LockManager.checkLock(currentReadFieldAccess.hashCode(), startTime);
+		System.out.println(Thread.currentThread()+" No exception happened during the checkLock in beforeReadAccess()");
 		// Pre-validation passed, so add to read set (if post-validation subsequently fails, not a problem since transaction will just abort and restart)
 		readSet.add(currentReadFieldAccess);
 	}
