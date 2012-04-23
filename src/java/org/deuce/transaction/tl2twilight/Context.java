@@ -214,7 +214,7 @@ final public class Context implements TwilightContext {
 //		}
 //	    else {
 	    	// reserve the transactional variables in the write set (can throw TransactionException if some fields in write set are LOCKED -- TODO: check this)
-			System.out.println("About to try to reserve write set");
+			System.out.println("About to try reserving write set");
 			writeSet.reserve();
 			System.out.println("Succeeded in reserving write set");
 			// validate the transactional variables in the read set
@@ -227,12 +227,16 @@ final public class Context implements TwilightContext {
 		try {
 			// if read set still inconsistent even after Twilight zone, throw TransactionException to cause transaction to restart
 			if(state != ReadSetState.CONSISTENT) {
+				System.out.println("inconsistent??");
 				return false;
 				//throw new TransactionException("Unresolved readset inconsistencies on finalization of commit.");
 			}
 			// otherwise, read set was consistent and we can publish write set (performing necessary locking and unlocking to do so)
+			System.out.println("About to try locking write set");
 			writeSet.lock();
+			System.out.println("Succeeded in locking write set");
 			writeSet.publishAndUnlock();
+			System.out.println("Succeeded in publishing and unlocking write set");
 			return true;
 		}
 		// if locking fails [can it? We reserved it already...]
@@ -327,6 +331,7 @@ final public class Context implements TwilightContext {
 		}
 		catch(TransactionException e) {
 			state = ReadSetState.INCONSISTENT;
+			System.out.println("validating found readset to be inconsistent");
 			return false;
 		}
 		return true;

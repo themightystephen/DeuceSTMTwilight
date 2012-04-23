@@ -46,12 +46,12 @@ public class LockManager {
 
 	// three states of a versioned-lock -- most-significant two bits used to represent lock state; remaining bits used for version number [Twilight-TL2 requires 2 bits for lock state]
 	final private static int NUM_TS_BITS = 30; // number of bits used for timestamp
-	final private static int FREE = 0x00; // most-significant two bits are 00
-	final private static int RESERVED = 0x01 << NUM_TS_BITS; // most-significant two bits are 01
-	final private static int LOCKED = 0x11 << NUM_TS_BITS; // most-significant two bits are 11
+	final private static int FREE = 0 << NUM_TS_BITS; // most-significant two bits are 00
+	final private static int RESERVED = 1 << NUM_TS_BITS; // most-significant two bits are 01
+	final private static int LOCKED = 3 << NUM_TS_BITS; // most-significant two bits are 11
 
 	// masks used for extracting value of lock and version number from versioned-lock
-	final private static int LOCK_MASK = 0x11 << NUM_TS_BITS;
+	final private static int LOCK_MASK = 3 << NUM_TS_BITS;
 	final private static int VERSION_MASK = ~LOCK_MASK; // complement of LOCK_MASK
 
 	// used for %8 and /8, respectively
@@ -61,7 +61,8 @@ public class LockManager {
 	/**
 	 * Self-locking --- two fields which have the same hash which are accessed within the one transaction. ???
 	 *
-	 * @param contextLocks I assume this is an array of locks or something that are thread-local, passed in from the Context class (hence the name 'contextLocks') -- note also that they are each a byte; that's quite a 'narrow' data type (only -128 to 127)
+	 * @param contextLocks I assume this is an array of locks or something that are thread-local, passed in from the Context class (hence the name 'contextLocks') -- note also that they are each a byte; that's quite a 'narrow' data type (only -128 to 127).
+	 * It's also 8 times smaller than the main array of versioned-locks we have here (in addition to each entry of the array being 8 bits rather than 32 bits).
 	 *
 	 * This method also tries to prevent 'self-locking' (which I assume is where a thread tries to lock a transactional variable which is already locked by that same thread).
 	 *
@@ -80,7 +81,7 @@ public class LockManager {
 		final byte selfLockBit = (byte)(1 << (lockIndex & MODULO_8));
 
 		// if already locked or reserved
-		System.out.println("lock = "+lock);
+		System.out.println("lock (as binary string) = "+Integer.toBinaryString(lock));
 		if( (lock & LOCK_MASK) != FREE) {
 			// if we have a case of self-locking, return false to indicate so
 			if((selfLockByte & selfLockBit) != 0)
@@ -91,11 +92,13 @@ public class LockManager {
 
 		// attempt to set lock as reserved atomically; throw exception if the CAS fails
 		boolean isReserved = locks.compareAndSet(lockIndex, lock, lock | RESERVED);
+		System.out.println("lock after reserved (as binary string)"+Integer.toBinaryString(locks.get(lockIndex)));
 		if(!isReserved)
 			throw FAILURE_EXCEPTION;
 
 		// mark in self locks
 		contextLocks[selfLockIndex] |= selfLockBit;
+		System.out.println("self lock after marked: "+Integer.toBinaryString(contextLocks[selfLockIndex]));
 
 		// reservation successful
 		return true;
@@ -149,12 +152,19 @@ public class LockManager {
 	 */
 	// throws a TransactionException if lock is held or if the versioned-lock value exceeds the given clock value (i.e. the object/field associated with the lock has been modified since the given clock value)
 	public static int checkLock(int lockIndex, int clock) {
+		System.out.println("Checking lock with index "+lockIndex+"; start time of transaction was "+clock);
 		int versionedLock = locks.get(lockIndex);
+		System.out.println("Contents of versioned-lock with that index is: "+Integer.toBinaryString(versionedLock));
 
+		System.out.println("LOCK MASK is: "+Integer.toBinaryString(LOCK_MASK));
+		System.out.println("VERS MASK is: "+Integer.toBinaryString(VERSION_MASK));
 		// if clock < timestamp/version of versioned-lock || versioned-lock is marked as locked (NOTE: it is okay for the lock to be reserved; reserved fields may still have concurrent read accesses)
-		if( clock < (versionedLock & VERSION_MASK) || (versionedLock & LOCK_MASK) != 0)
+		if( clock < (versionedLock & VERSION_MASK) || (versionedLock & LOCK_MASK) == LOCKED) {
+			System.out.println("failure in checking lock");
 			throw FAILURE_EXCEPTION;
+		}
 
+		System.out.println("success in checking lock");
 		return versionedLock;
 	}
 
@@ -170,14 +180,16 @@ public class LockManager {
 	 * @param expected
 	 */
 	public static void checkLock(int lockIndex, int clock, int expected) {
-		int lock = locks.get(lockIndex);
+		int versionedLock = locks.get(lockIndex);
 
 		// if versioned-lock bits are not the same as given by expected || clock < timestamp/version of versioned-lock || versioned-lock is marked as locked (NOTE: it is okay for the lock to be reserved; reserved fields may still have concurrent read accesses)
-		if( lock != expected || clock < (lock & VERSION_MASK) || (lock & LOCK_MASK) != 0)
+		if( versionedLock != expected || clock < (versionedLock & VERSION_MASK) || (versionedLock & LOCK_MASK) == LOCKED)
 			throw FAILURE_EXCEPTION;
 	}
 
 	/**
+	 * Used when we want to unlock a field after failing to commit due to a conflict.
+	 *
 	 * TODO: javadoc
 	 *
 	 * @param lockIndex
@@ -192,6 +204,14 @@ public class LockManager {
 		clearSelfLock(lockIndex, contextLocks);
 	}
 
+	/**
+	 * Used when we want to unlock a field after successfully committing. Hence why you provide
+	 * a new clock/version value.
+	 *
+	 * @param lockIndex
+	 * @param newClock
+	 * @param contextLocks
+	 */
 	public static void setAndReleaseLock( int lockIndex, int newClock, byte[] contextLocks){
 //		int lockIndex = hash; // was: int lockIndex = hash & MASK;
 		locks.set(lockIndex, newClock); // was: locks.set(lockIndex, newClock);

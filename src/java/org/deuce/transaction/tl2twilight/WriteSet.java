@@ -107,6 +107,8 @@ public class WriteSet{
 	}
 
 	/**
+	 * Used for failing commits (i.e. after a conflict).
+	 *
 	 * Unlocks all transactional variables in this write set.
 	 * Used when we need to unlock but not publish.
 	 *
@@ -125,16 +127,22 @@ public class WriteSet{
 	}
 
 	/**
+	 * Used for successful commits.
+	 *
 	 * Publishes transactional variables in this write set to memory and also unlocks them
 	 * so other transactions can access them. [wait, this is what I want it to do but I'm not sure
 	 * LockTable.setAndReleaseLock() actually does that...]
 	 */
 	// TODO: unlock in GLOBALLY CONSISTENT ORDER (i.e. in reverse order to the locking) [for unlocking it matters less...in fact, it doesn't matter at all I don't think]
 	public void publishAndUnlock() {
+		// publish writeset!
+		publish();
+
+		// then unlock writeset (NOTE: different method of LockManager called for case of successful commit)
 		lockedSet.forEach(new TIntProcedure() {
 			@Override
-			public boolean execute(int value) {
-				LockManager.setAndReleaseLock(value, Context.clock.incrementAndGet(), locksMarker);
+			public boolean execute(int hashcode) {
+				LockManager.setAndReleaseLock(hashcode, Context.clock.incrementAndGet(), locksMarker);
 				return true;
 			}
 		});
