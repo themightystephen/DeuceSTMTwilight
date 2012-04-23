@@ -29,56 +29,75 @@ import org.deuce.transform.commons.Exclude;
  * <p>This class makes good use of bitwise operations and masking. Most/all the masking is required because the state of a lock is
  * stored with the version number (given by value of the global clock when a field which indexes into that lock in the table
  * was last modified).</p>
+ *
+ * <p>Note that there is not necessarily a lock per individual field. It is likely this is the case but it
+ * is not guaranteed. Two distinct fields may occassionally have the same hash and therefore be using
+ * the same lock in the hash table. In such a scenario there is potential for false conflicts.</p>
  */
 @Exclude
 public class LockManager {
-	// Failure transaction
+	// Failure exception
 	final private static TransactionException FAILURE_EXCEPTION = new TransactionException( "Failed on lock.");
 
-	// Number of locks in hashmap and a mask [haven't fully worked out what mask is for -- something to do with determining an index into hashmap]
+	// number of locks available in hash table and mask used for helping determine index into hash table
 	public static final int LOCK_TABLE_SIZE = 1<<20; // amount of locks - TODO add system property
+	public static final int HASH_MASK = LOCK_TABLE_SIZE - 1; // i.e. 0x000FFFFF
 	private static final AtomicIntegerArray locks =  new AtomicIntegerArray(LOCK_TABLE_SIZE); // array of 2^20 entries of 32-bit lock words
-//	public static final int MASK = 0x000FFFFF;
-	private static final int MODULO_8 = 7; //Used for %8
-	private static final int DIVIDE_8 = 3; //Used for /8
 
-	// States of versioned-locks -- first 2 bits represent lock state; remaining 30 bits for version number [Twilight-TL2 requires 2 bits for lock state]
-	final private static int FREE = 0x00000000; // all 0 bits
-	final private static int RESERVED = 0x80000000; // 10...followed by 30 more 0 bits...
-	final private static int LOCKED = 0xC0000000; // 11...followed by 30 more 0 bits...
+	// three states of a versioned-lock -- most-significant two bits used to represent lock state; remaining bits used for version number [Twilight-TL2 requires 2 bits for lock state]
+	final private static int NUM_TS_BITS = 30; // number of bits used for timestamp
+	final private static int FREE = 0x00; // most-significant two bits are 00
+	final private static int RESERVED = 0x01 << NUM_TS_BITS; // most-significant two bits are 01
+	final private static int LOCKED = 0x11 << NUM_TS_BITS; // most-significant two bits are 11
 
 	// masks used for extracting value of lock and version number from versioned-lock
-	final private static int LOCK_MASK = 0xC0000000; // 11...followed by 30 more 0 bits...
+	final private static int LOCK_MASK = 0x11 << NUM_TS_BITS;
 	final private static int VERSION_MASK = ~LOCK_MASK; // complement of LOCK_MASK
 
-	// what they were before
-//	final private static int LOCKED = 1 << 31; // binary digits for 2^30 represent lock held [Twilight-TL2 requires 2 bits for locking states]
-//	final private static int UNLOCK = ~LOCKED; // complement of binary for 2^31 represent lock NOT held
+	// used for %8 and /8, respectively
+	private static final int MODULO_8 = 7;
+	private static final int DIVIDE_8 = 3;
 
 	/**
+	 * Self-locking --- two fields which have the same hash which are accessed within the one transaction. ???
 	 *
 	 * @param contextLocks I assume this is an array of locks or something that are thread-local, passed in from the Context class (hence the name 'contextLocks') -- note also that they are each a byte; that's quite a 'narrow' data type (only -128 to 127)
 	 *
 	 * This method also tries to prevent 'self-locking' (which I assume is where a thread tries to lock a transactional variable which is already locked by that same thread).
+	 *
+	 * returns false on self-locking/reserving ;-)
+	 * returns true on successful reservation
+	 * throws an exception on failure to reserve (due to the field having already been reserved or locked by another transaction)
 	 */
 	public static boolean reserve(int lockIndex, byte[] contextLocks) {
+		System.out.println("lock index given is "+lockIndex);
 		final int lock = locks.get(lockIndex);
-		// TODO: work out what the heck is going on with this self locking stuff
+
 		final int selfLockIndex = lockIndex >>> DIVIDE_8;
+		System.out.println("selfLockIndex: "+selfLockIndex);
 		final byte selfLockByte = contextLocks[selfLockIndex];
+		System.out.println("selfLockByte: "+selfLockByte);
 		final byte selfLockBit = (byte)(1 << (lockIndex & MODULO_8));
 
-		if( (lock & LOCK_MASK) != FREE) {  // is already locked (or reserved??)?
-			if( (selfLockByte & selfLockBit) != 0) // check for self locking
+		// if already locked or reserved
+		System.out.println("lock = "+lock);
+		if( (lock & LOCK_MASK) != FREE) {
+			// if we have a case of self-locking, return false to indicate so
+			if((selfLockByte & selfLockBit) != 0)
 				return false;
+			// otherwise throw an exception
 			throw FAILURE_EXCEPTION;
 		}
 
+		// attempt to set lock as reserved atomically; throw exception if the CAS fails
 		boolean isReserved = locks.compareAndSet(lockIndex, lock, lock | RESERVED);
 		if(!isReserved)
 			throw FAILURE_EXCEPTION;
 
-		contextLocks[selfLockIndex] |= selfLockBit; //mark in self locks
+		// mark in self locks
+		contextLocks[selfLockIndex] |= selfLockBit;
+
+		// reservation successful
 		return true;
 	}
 
@@ -99,17 +118,23 @@ public class LockManager {
 			throw FAILURE_EXCEPTION;
 		}
 
+		// attempt to set lock as locked atomically; throw exception if the CAS fails
 		boolean isLocked = locks.compareAndSet(lockIndex, lock, lock | LOCKED);
-
-		if( !isLocked)
+		if(!isLocked)
 			throw FAILURE_EXCEPTION;
 
-		contextLocks[selfLockIndex] |= selfLockBit; //mark in self locks
+		// mark in self locks
+		contextLocks[selfLockIndex] |= selfLockBit;
+
+		// lock successful
 		return true;
 	}
 
 
 	/**
+	 * Need to check versioned-locks since a field that's in the readset of one transaction might
+	 * be in the writeset of another transaction.
+	 *
 	 * <p>Used in two places:
 	 * <ul>
 	 * <li>For pre-validation of individual reads</li>
@@ -127,7 +152,7 @@ public class LockManager {
 		int versionedLock = locks.get(lockIndex);
 
 		// if clock < timestamp/version of versioned-lock || versioned-lock is marked as locked (NOTE: it is okay for the lock to be reserved; reserved fields may still have concurrent read accesses)
-		if( clock < (versionedLock & VERSION_MASK) || (versionedLock & LOCKED) != 0)
+		if( clock < (versionedLock & VERSION_MASK) || (versionedLock & LOCK_MASK) != 0)
 			throw FAILURE_EXCEPTION;
 
 		return versionedLock;
@@ -148,7 +173,7 @@ public class LockManager {
 		int lock = locks.get(lockIndex);
 
 		// if versioned-lock bits are not the same as given by expected || clock < timestamp/version of versioned-lock || versioned-lock is marked as locked (NOTE: it is okay for the lock to be reserved; reserved fields may still have concurrent read accesses)
-		if( lock != expected || clock < (lock & VERSION_MASK) || (lock & LOCKED) != 0)
+		if( lock != expected || clock < (lock & VERSION_MASK) || (lock & LOCK_MASK) != 0)
 			throw FAILURE_EXCEPTION;
 	}
 
@@ -159,16 +184,17 @@ public class LockManager {
 	 * @param contextLocks
 	 */
 	public static void unlock(int lockIndex, byte[] contextLocks){
-		int lockedValue = locks.get(lockIndex);
-		int unlockedValue = lockedValue & FREE; //TODO: is this right???
-		locks.set(lockIndex, unlockedValue);
+		int versionedLock = locks.get(lockIndex);
+		int unlockedValue = versionedLock & FREE;
+		int versionValue = versionedLock & VERSION_MASK;
+		locks.set(lockIndex, versionValue | unlockedValue);
 
 		clearSelfLock(lockIndex, contextLocks);
 	}
 
-	public static void setAndReleaseLock( int hash, int newClock, byte[] contextLocks){
-		int lockIndex = hash & LOCK_TABLE_SIZE; // was: int lockIndex = hash & MASK;
-		locks.set(lockIndex, newClock);
+	public static void setAndReleaseLock( int lockIndex, int newClock, byte[] contextLocks){
+//		int lockIndex = hash; // was: int lockIndex = hash & MASK;
+		locks.set(lockIndex, newClock); // was: locks.set(lockIndex, newClock);
 
 		clearSelfLock(lockIndex, contextLocks);
 	}

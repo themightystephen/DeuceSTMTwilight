@@ -41,7 +41,7 @@ public class AtomicMethod extends MethodVisitor {
 	// attributes of current @Atomic method's annotation
 	private Integer retries = Integer.getInteger("org.deuce.transaction.retries", Integer.MAX_VALUE);
 	private String metainf = "";//Integer.getInteger("org.deuce.transaction.retries", Integer.MAX_VALUE);
-	private boolean useTwilight;
+	private boolean useTwilightOnlyOperations = false; // indicates non-standard STM operations such as prepareCommit(), finalizeCommit() and other Twilight-only API calls are being by the programmer
 
 	final private String className;
 	final private String methodName;
@@ -84,14 +84,14 @@ public class AtomicMethod extends MethodVisitor {
 					// meta information
 					if(name.equals(ATOMIC_ANNOTATION_NAME_METAINFORMATION))
 						AtomicMethod.this.metainf = (String)value;
-					// twilight attribute set
-					if(name.equals(ATOMIC_ANNOTATION_NAME_TWILIGHT)) {
-						// and context does support twilight zones, ok
+					// twilight attribute set (with value true)
+					if(name.equals(ATOMIC_ANNOTATION_NAME_TWILIGHT) && (Boolean)value) {
+						// if context supports twilight zones, ok
 						if(Agent.CONTEXT_SUPPORTS_TWILIGHT)
-							AtomicMethod.this.useTwilight = (Boolean)value;
-						// and context *doesn't* support twilight zones, error
+							AtomicMethod.this.useTwilightOnlyOperations = (Boolean)value;
+						// if context *doesn't* support twilight zones, error
 						else
-							throw new RuntimeException("@Atomic method "+className+"."+methodName+" twilight attribute set but selected context "+Agent.CONTEXT_CHOSEN.getName()+" does not support Twilight operations.");
+							throw new RuntimeException("@Atomic method "+className+"."+methodName+" twilight attribute set to 'true' but selected context "+Agent.CONTEXT_CHOSEN.getName()+" does not support Twilight operations.");
 					}
 
 					av.visit(name, value);
@@ -265,10 +265,7 @@ public class AtomicMethod extends MethodVisitor {
 		mv.visitVarInsn(ALOAD, contextIndex);
 		mv.visitLdcInsn(ATOMIC_BLOCK_COUNTER.getAndIncrement());
 		mv.visitLdcInsn(metainf);
-		if(Agent.CONTEXT_SUPPORTS_TWILIGHT)
-			mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "init", "(ILjava/lang/String;)V");
-		else
-			mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "init", "(ILjava/lang/String;)V");
+		mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "init", "(ILjava/lang/String;)V");
 
 		/* result = foo( context, ...)  */
 		mv.visitLabel(l0);
@@ -304,10 +301,7 @@ public class AtomicMethod extends MethodVisitor {
 		mv.visitVarInsn(ASTORE, exceptionIndex);
 		Label l27 = new Label();
 		mv.visitVarInsn(ALOAD, contextIndex);
-		if(Agent.CONTEXT_SUPPORTS_TWILIGHT)
-			mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "rollback", "()V");
-		else
-			mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "rollback", "()V");
+		mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "rollback", "()V");
 		mv.visitLabel(l27);
 		mv.visitVarInsn(ALOAD, exceptionIndex);
 		mv.visitInsn(ATHROW);
@@ -364,11 +358,9 @@ public class AtomicMethod extends MethodVisitor {
 		mv.visitLabel(l17);
 		mv.visitVarInsn(ALOAD, contextIndex);
 		// if programmer has specified to use twilight for this method, call finalizeCommit() otherwise user is either using twilight STM without twilight zone, or their using a non-twilight STM
-		if(Agent.CONTEXT_SUPPORTS_TWILIGHT) {
-			if(useTwilight)
-				mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "finalizeCommit", "()Z");
-			else
-				mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "commit", "()Z");
+		if(useTwilightOnlyOperations) {
+			System.out.println("useTwilightOnlyOperations is true");
+			mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "finalizeCommit", "()Z");
 		}
 		else {
 			mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "commit", "()Z");
@@ -403,11 +395,7 @@ public class AtomicMethod extends MethodVisitor {
 		// else
 		mv.visitLabel(l16); // context.rollback();
 		mv.visitVarInsn(ALOAD, contextIndex);
-		// TODO: for all the methods that are already in the Context interface, I actually don't need to have this if..else; could just call Context.rollback() because rollback is in Context interface
-		if(Agent.CONTEXT_SUPPORTS_TWILIGHT)
-			mv.visitMethodInsn(INVOKEINTERFACE, TwilightContext.TWILIGHTCONTEXT_INTERNAL, "rollback", "()V");
-		else
-			mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "rollback", "()V");
+		mv.visitMethodInsn(INVOKEINTERFACE, Context.CONTEXT_INTERNAL, "rollback", "()V");
 
 		mv.visitInsn(ICONST_1); // commit = true;
 		mv.visitVarInsn(ISTORE, commitIndex);

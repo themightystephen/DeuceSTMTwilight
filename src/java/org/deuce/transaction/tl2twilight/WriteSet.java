@@ -65,8 +65,11 @@ public class WriteSet{
 			@Override
 			public boolean execute(WriteFieldAccess writeField) {
 				int hashCode = writeField.hashCode();
-				if(LockManager.reserve(hashCode, locksMarker))
+				System.out.println("about to try to reserve a field");
+				if(LockManager.reserve(hashCode, locksMarker)) {
+					System.out.println("reserved a field");
 					reservedSet.add(hashCode);
+				}
 				return true;
 			}
 		});

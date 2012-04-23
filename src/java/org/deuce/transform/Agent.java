@@ -168,116 +168,116 @@ public class Agent implements ClassFileTransformer {
 	}
 
 	/**
-		 * Transforms a single class' bytecode appropriately (provided the class is not marked as excluded, either explicitly
-		 * using the @Exclude annotation or through a JVM argument).
-		 *
-		 * @param offline <code>true</code> if this is an offline transform.
-		 */
-		private List<ClassByteCode> transform(String className, byte[] classfileBuffer, boolean offline)
-		throws IllegalClassFormatException {
-			List<ClassByteCode> classesWithBytecode = new ArrayList<ClassByteCode>(); // a single .class file can become multiple when in offline mode. Additional .class files are created to hold synthetic fields. 95% sure this is NOT done during online instrumentation.
+	 * Transforms a single class' bytecode appropriately (provided the class is not marked as excluded, either explicitly
+	 * using the @Exclude annotation or through a JVM argument).
+	 *
+	 * @param offline <code>true</code> if this is an offline transform.
+	 */
+	private List<ClassByteCode> transform(String className, byte[] classfileBuffer, boolean offline)
+	throws IllegalClassFormatException {
+		List<ClassByteCode> classesWithBytecode = new ArrayList<ClassByteCode>(); // a single .class file can become multiple when in offline mode. Additional .class files are created to hold synthetic fields. 95% sure this is NOT done during online instrumentation.
 
-			// RETURN CLASS UNTRANSFORMED IF EXCLUDED
-			ClassReader cr1 = new ClassReader(classfileBuffer);
-			IdentifyExcludedClassVisitor eav = new IdentifyExcludedClassVisitor(Opcodes.ASM4);
-			cr1.accept(eav, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+		// RETURN CLASS UNTRANSFORMED IF EXCLUDED
+		ClassReader cr1 = new ClassReader(classfileBuffer);
+		IdentifyExcludedClassVisitor eav = new IdentifyExcludedClassVisitor(Opcodes.ASM4);
+		cr1.accept(eav, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 
-			// return classfile untransformed if class name starts with $ OR class is in pre-defined exclusion set OR class is marked with @Exclude annotation OR class is an annotation type (latter two are performed by the visitor above)
-			boolean excluded = className.startsWith("$") || ExcludeIncludeStore.exclude(className) || eav.isClassExcluded();
-			if(excluded) {
-				classesWithBytecode.add(new ClassByteCode(className, classfileBuffer));
-				System.out.println("Class "+className+" is in predefined exclude set OR is annotated with @Exclude.");
-				return classesWithBytecode;
-			}
-
-			// OUTPUT DEBUG INFORMATION
-			System.out.println("Transforming class "+className+" (i.e. NOT excluded).");
-
-			if (logger.isLoggable(Level.FINER))
-				logger.finer("Transforming: Class=" + className);
-
-			// PERFORM TRANSFORMATION
-			// Reads the bytecode and calculate the frames, to support 1.5- code.
-			classfileBuffer = addFrames(className, classfileBuffer);
-
-			if(GLOBAL_TXN) {
-				// start visiting the class (its bytecode); transformed class bytecode is returned
-				ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-				BaseClassTransformer cv = new org.deuce.transaction.global.ClassTransformer(cw, className);
-				ClassReader cr = new ClassReader(classfileBuffer); // parses bytecode and generates visit events when accept() called on it
-				cr.accept(cv, ClassReader.EXPAND_FRAMES); // fire all visiting events corresponding to the bytecode structure; our transformation visitor cv handles the events
-				// store association of class name with bytecode
-				classesWithBytecode.add(new ClassByteCode(className, cw.toByteArray()));
-			}
-			else {
-				org.deuce.transform.twilight.ExternalFieldsHolderClass fieldsHolder = null;
-				if(offline) {
-					fieldsHolder = new org.deuce.transform.twilight.ExternalFieldsHolderClass(className);
-				}
-
-				// OLD: keep around for time being
-	//			// if org.deuce.transaction.contextChosen property chosen is a Context which does NOT also implement TwilightContext, show error and exit
-	//			Class<? extends Context> contextClass = getContextClass();
-	//			if(ENABLE_TWILIGHT && !implementsInterface(contextClass,TwilightContext.class)) {
-	//				String errMsg = "org.deuce.transaction.enableTwilight option set to true whilst using a context class (via org.deuce.transaction.contextClass property), "+contextClass.getName()+", that does not support Twilight operations ("+contextClass.getName()+" does not implement the TwilightContext interface).";
-	//				logger.severe(errMsg);
-	//				System.err.println(errMsg); // put directly on stderr to ensure error message is seen
-	//				System.exit(1); // error exit
-	//			}
-
-				// start visiting the class (its bytecode); returned is the transformed class bytecode
-				ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-
-				try {
-					// create directory to store textual representation of original and transformed classes if it does not already exist
-					new File("gen_textual_classes").mkdir();
-
-					// show textual representation of transformed bytecode
-					File postTransformationFile = new File("gen_textual_classes/postTransformation_"+className.replace("/", "."));
-					postTransformationFile.createNewFile();
-					PrintWriter pw = new PrintWriter(postTransformationFile);
-					TraceClassVisitor tcv = new TraceClassVisitor(cw,pw); // TODO: later remove trace visitor when debugging no longer required
-
-					// choose class transformer visitor, either the ordinary one or twilight one. Twilight one only compatible with use of a Context that implements TwilightContext interface.
-					BaseClassTransformer cv = CONTEXT_SUPPORTS_TWILIGHT ? new org.deuce.transform.twilight.ClassTransformer(tcv, className, fieldsHolder)
-																		: new org.deuce.transform.core.ClassTransformer(tcv, className, fieldsHolder);
-					// TODO: I'm thinking of having some kind of dynamic thing after I've merged the ClassTransformers into one, where I just create a single ClassTransformer which statically initialises CONTEXT_SUPPORTS_TWILIGHT there instead of here, and dynamically 'dispatches' to the correct methods or whatever using that static field
-
-
-					// show textual representation of bytecode before being transformed
-					File preTransformationFile = new File("gen_textual_classes/original_"+className.replace("/", "."));
-					preTransformationFile.createNewFile();
-					PrintWriter pw2= new PrintWriter(preTransformationFile);
-					TraceClassVisitor tcv2 = new TraceClassVisitor(cv,pw2); // TODO: later remove trace visitor when debugging no longer required
-
-					ClassReader cr = new ClassReader(classfileBuffer); // parses bytecode and generates visit events when accept() called on it
-					cr.accept(tcv2, ClassReader.EXPAND_FRAMES); // fire all visiting events corresponding to the bytecode structure; our transformation visitor cv handles the events
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-
-				// store association of class name with bytecode
-				classesWithBytecode.add(new ClassByteCode(className, cw.toByteArray()));
-				// NOTE: offline instrumentation means that the synthetic fields are put in a separate xxxDeuceFieldsHolder class rather than added to the original class (don't know why yet)
-				if(offline) {
-					// get bytecode for the additional generated XXXDeuceFieldsHolder class and add it to byteCodes List (remember, separate field holder class only happens in offline mode)
-					classesWithBytecode.add(new ClassByteCode(fieldsHolder.getFieldsHolderName(),fieldsHolder.getBytecode()));
-				}
-				// TODO: the interface, fieldsHolder.getFieldsHolderName(className), is horrible way of getting the name of the fields holder class, especially since we already passed in the className in the constructor above ()! Definitely need to review/rewrite the interface of FieldHolder.
-				// TODO: also need to look inside ClassTransformer and maybe have a separate (inner?) class that implements FieldsHolder instead of having the ClassTransformer itself implementing it (which design-wise, I don't like)
-			}
-
-			if(VERBOSE) {
-				try {
-					verbose(classesWithBytecode);
-				} catch (FileNotFoundException e) {
-					e.printStackTrace();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-			}
+		// return classfile untransformed if class name starts with $ OR class is in pre-defined exclusion set OR class is marked with @Exclude annotation OR class is an annotation type (latter two are performed by the visitor above)
+		boolean excluded = className.startsWith("$") || ExcludeIncludeStore.exclude(className) || eav.isClassExcluded();
+		if(excluded) {
+			classesWithBytecode.add(new ClassByteCode(className, classfileBuffer));
+			System.out.println("Class "+className+" is in predefined exclude set OR is annotated with @Exclude.");
 			return classesWithBytecode;
 		}
+
+		// OUTPUT DEBUG INFORMATION
+		System.out.println("Transforming class "+className+" (i.e. NOT excluded).");
+
+		if (logger.isLoggable(Level.FINER))
+			logger.finer("Transforming: Class=" + className);
+
+		// PERFORM TRANSFORMATION
+		// Reads the bytecode and calculate the frames, to support 1.5- code.
+		classfileBuffer = addFrames(className, classfileBuffer);
+
+		if(GLOBAL_TXN) {
+			// start visiting the class (its bytecode); transformed class bytecode is returned
+			ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+			BaseClassTransformer cv = new org.deuce.transaction.global.ClassTransformer(cw, className);
+			ClassReader cr = new ClassReader(classfileBuffer); // parses bytecode and generates visit events when accept() called on it
+			cr.accept(cv, ClassReader.EXPAND_FRAMES); // fire all visiting events corresponding to the bytecode structure; our transformation visitor cv handles the events
+			// store association of class name with bytecode
+			classesWithBytecode.add(new ClassByteCode(className, cw.toByteArray()));
+		}
+		else {
+			org.deuce.transform.twilight.ExternalFieldsHolderClass fieldsHolder = null;
+			if(offline) {
+				fieldsHolder = new org.deuce.transform.twilight.ExternalFieldsHolderClass(className);
+			}
+
+			// OLD: keep around for time being
+//			// if org.deuce.transaction.contextChosen property chosen is a Context which does NOT also implement TwilightContext, show error and exit
+//			Class<? extends Context> contextClass = getContextClass();
+//			if(ENABLE_TWILIGHT && !implementsInterface(contextClass,TwilightContext.class)) {
+//				String errMsg = "org.deuce.transaction.enableTwilight option set to true whilst using a context class (via org.deuce.transaction.contextClass property), "+contextClass.getName()+", that does not support Twilight operations ("+contextClass.getName()+" does not implement the TwilightContext interface).";
+//				logger.severe(errMsg);
+//				System.err.println(errMsg); // put directly on stderr to ensure error message is seen
+//				System.exit(1); // error exit
+//			}
+
+			// start visiting the class (its bytecode); returned is the transformed class bytecode
+			ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+
+			try {
+				// create directory to store textual representation of original and transformed classes if it does not already exist
+				new File("gen_textual_classes").mkdir();
+
+				// show textual representation of transformed bytecode
+				File postTransformationFile = new File("gen_textual_classes/postTransformation_"+className.replace("/", "."));
+				postTransformationFile.createNewFile();
+				PrintWriter pw = new PrintWriter(postTransformationFile);
+				TraceClassVisitor tcv = new TraceClassVisitor(cw,pw); // TODO: later remove trace visitor when debugging no longer required
+
+				// choose class transformer visitor, either the ordinary one or twilight one. Twilight one only compatible with use of a Context that implements TwilightContext interface.
+				BaseClassTransformer cv = CONTEXT_SUPPORTS_TWILIGHT ? new org.deuce.transform.twilight.ClassTransformer(tcv, className, fieldsHolder)
+																	: new org.deuce.transform.core.ClassTransformer(tcv, className, fieldsHolder);
+				// TODO: I'm thinking of having some kind of dynamic thing after I've merged the ClassTransformers into one, where I just create a single ClassTransformer which statically initialises CONTEXT_SUPPORTS_TWILIGHT there instead of here, and dynamically 'dispatches' to the correct methods or whatever using that static field
+
+
+				// show textual representation of bytecode before being transformed
+				File preTransformationFile = new File("gen_textual_classes/original_"+className.replace("/", "."));
+				preTransformationFile.createNewFile();
+				PrintWriter pw2= new PrintWriter(preTransformationFile);
+				TraceClassVisitor tcv2 = new TraceClassVisitor(cv,pw2); // TODO: later remove trace visitor when debugging no longer required
+
+				ClassReader cr = new ClassReader(classfileBuffer); // parses bytecode and generates visit events when accept() called on it
+				cr.accept(tcv2, ClassReader.EXPAND_FRAMES); // fire all visiting events corresponding to the bytecode structure; our transformation visitor cv handles the events
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+
+			// store association of class name with bytecode
+			classesWithBytecode.add(new ClassByteCode(className, cw.toByteArray()));
+			// NOTE: offline instrumentation means that the synthetic fields are put in a separate xxxDeuceFieldsHolder class rather than added to the original class (don't know why yet)
+			if(offline) {
+				// get bytecode for the additional generated XXXDeuceFieldsHolder class and add it to byteCodes List (remember, separate field holder class only happens in offline mode)
+				classesWithBytecode.add(new ClassByteCode(fieldsHolder.getFieldsHolderName(),fieldsHolder.getBytecode()));
+			}
+			// TODO: the interface, fieldsHolder.getFieldsHolderName(className), is horrible way of getting the name of the fields holder class, especially since we already passed in the className in the constructor above ()! Definitely need to review/rewrite the interface of FieldHolder.
+			// TODO: also need to look inside ClassTransformer and maybe have a separate (inner?) class that implements FieldsHolder instead of having the ClassTransformer itself implementing it (which design-wise, I don't like)
+		}
+
+		if(VERBOSE) {
+			try {
+				verbose(classesWithBytecode);
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		return classesWithBytecode;
+	}
 
 	/**
 	 * Reads the bytecode and calculate the frames, to support 1.5- code.

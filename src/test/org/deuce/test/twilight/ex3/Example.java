@@ -38,7 +38,8 @@ public class Example {
 		counterTag = Twilight.newTag();
 		pos = counter + 1;
 		counter = pos;
-		Twilight.markField(counterTag, "counter", Example.class); // NOTE: only way I can see of indicating the variable to be marked is to pass the String name and then use Java reflection
+		// TODO: temporarily commented out
+//		Twilight.markField(counterTag, "counter", Example.class); // NOTE: only way I can see of indicating the variable to be marked is to pass the String name and then use Java reflection
 	}
 
 	@TwilightConsistent(name = "ex")

@@ -24,17 +24,20 @@ public class SourceTransformExample {
 	private static int x = 0;
 
 	// synthetic
-	public static final long x__ADDRESS__; // NOTE: Java compiler again is restrictive here; in bytecode we won't have the try catch below and therefore it is guaranteed that the field will be initialised.
+	// TODO: temporarily commented out
+//	public static final long x__ADDRESS__; // NOTE: Java compiler again is restrictive here; in bytecode we won't have the try catch below and therefore it is guaranteed that the field will be initialised.
 	public static Object __CLASS_BASE__; // yes, deliberately not final
 
 	// in this static/class initialiser, we would initialise ALL the synthetic (address) fields of this class
 	static {
 		// NOTE: Java compiler requires a try catch around these initialisations of ADDRESS fields but in bytecode I can avoid this since I KNOW the field "x" exists
 		try {
-			x__ADDRESS__ = AddressUtil.getAddress(SourceTransformExample.class.getDeclaredField("x"));
+			// TODO: temporarily commented out
+//			x__ADDRESS__ = AddressUtil.getAddress(SourceTransformExample.class.getDeclaredField("x"));
 		}
 		catch (SecurityException e) { e.printStackTrace(); }
-		catch (NoSuchFieldException e) { e.printStackTrace(); }
+		// TODO: temporarily commented out
+//		catch (NoSuchFieldException e) { e.printStackTrace(); }
 	}
 
 	/**

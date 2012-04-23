@@ -99,7 +99,7 @@ final public class Context implements TwilightContext {
 	private ReadFieldAccess currentReadFieldAccess;
 
 	/**
-	 * Marked on beforeRead, used for the double lock check [TL2]. [double lock check refers to the pre- and post-validation that is done on reads]
+	 * preValidationReadVersionedLock is marked on beforeRead, and used along with startTime for the double lock check. [double lock check refers to the pre- and post-validation that is done on reads]
 	 * startTime corresponds to T_init, the value of the global clock/timer when the transaction started.
 	 * preValidationReadVersionedLock is the value of the versioned-lock of the current transactional read operation taking place
 	 * (used in beforeReadAccess and onReadAccess).
@@ -166,13 +166,13 @@ final public class Context implements TwilightContext {
 		this.floatPool.clear();
 		this.doublePool.clear();
 
-		// lock according to the transaction irrevocable state (NOTE: irrevocableState must only be initialised in the constructor, not here)
+		// lock according to the transaction irrevocable state (NOTE: irrevocableState must only be initialised in the constructor, not here -- due to the fact that as soon as we spot that the transaction needs to become irrevocable (by a call to onIrrevocableAccess()), the transaction is restarted with irrevocableState set to true -- resetting it to false in this init() method would stop it working)
 		if(irrevocableState)
 			irrevocableAccessLock.writeLock().lock();
 		else
 			irrevocableAccessLock.readLock().lock();
 
-		// sample the global clock to get start time (T_init)
+		// sample the global clock to get start time (T_init) (NOTE: sampling the clock MUST occur after (the potential) locking of the irrevocableAccessLock; see message of first commit appearing on Feb 10th 2011)
 		this.startTime = clock.get();
 	}
 
@@ -214,7 +214,9 @@ final public class Context implements TwilightContext {
 //		}
 //	    else {
 	    	// reserve the transactional variables in the write set (can throw TransactionException if some fields in write set are LOCKED -- TODO: check this)
+			System.out.println("About to try to reserve write set");
 			writeSet.reserve();
+			System.out.println("Succeeded in reserving write set");
 			// validate the transactional variables in the read set
 			return validate();
 //	    }
@@ -233,16 +235,9 @@ final public class Context implements TwilightContext {
 			writeSet.publishAndUnlock();
 			return true;
 		}
-		// clean-up code to set irrevocable state appropriately and also release appropriate locks (this is always run before returning)
-		// TODO: consider whether it makes any sense to have an irrevocable state. I suppose we would like to remain compatible with existing application code that uses it.
-		finally {
-			if(irrevocableState){
-				irrevocableState = false;
-				irrevocableAccessLock.writeLock().unlock();
-			}
-			else{
-				irrevocableAccessLock.readLock().unlock();
-			}
+		// if locking fails [can it? We reserved it already...]
+		catch(TransactionException ex) {
+			return false;
 		}
 	}
 
@@ -251,14 +246,27 @@ final public class Context implements TwilightContext {
 	 */
 	@Override
 	public boolean commit() {
+		System.out.println("Transaction (with context xxx) has called tl2twilight.Context.commit()");
 		try {
 			prepareCommit();
+			System.out.println("Got past prepareCommit() inside commit()");
 			finalizeCommit();
+			System.out.println("Got past finalizeCommit() inside commit()");
 		}
 		catch(TransactionException exception){
 			// exception is either due to not being able to reserve all the write set locks in prepareCommit(),
 			// or because the read set was still inconsistent after the twilight zone in finalizeCommit()
 			return false;
+		}
+		// clean-up code to set irrevocable state appropriately and also release appropriate locks (this is always run before returning)
+		finally {
+			if(irrevocableState){
+				irrevocableState = false;
+				irrevocableAccessLock.writeLock().unlock();
+			}
+			else{
+				irrevocableAccessLock.readLock().unlock();
+			}
 		}
 		return true;
 	}
@@ -547,6 +555,12 @@ final public class Context implements TwilightContext {
 	 * Atomic by the programmer.</p>
 	 *
 	 * <p>Pre-validation: check read is valid before actually reading the value of the field.</p>
+	 *
+	 *
+	 *
+	 *
+	 * @param obj The owning object of the field being read.
+	 * @param field The address of the field being read which is stored in the synthetic field field__ADDRESS__ (in either the same class as the field itself, or in a synthetic fields holder class)
 	 */
 	// 1.
 	@Override
@@ -560,6 +574,8 @@ final public class Context implements TwilightContext {
 		// construct new ReadFieldAccess and store temporarily in currentReadFieldAccess
 		ReadFieldAccess readEntry = new ReadFieldAccess(obj, field);
 		currentReadFieldAccess = readEntry;
+		System.out.println(currentReadFieldAccess.hashCode());
+//		System.out.println("Hashcode of ReadFieldAccess with owner object "+obj+" and field "+field+" is "+currentReadFieldAccess.hashCode());
 
 		// Check the read is valid (PRE-VALIDATION step described in the thesis on p32)
 		preValidationReadVersionedLock = LockManager.checkLock(currentReadFieldAccess.hashCode(), startTime);
@@ -595,7 +611,7 @@ final public class Context implements TwilightContext {
 	}
 
 
-	// in each of these onReadAccess methods below, value is the
+	// in each of these onReadAccess methods below, value is the result of the bytecode performing a direct memory read before calling them; if validation succeeds we just return the value they provided. If this transactions has written to it already, then return the value written. If validation fails (another Tx has written to it), then we abort
 	// 2.
 	@Override
 	public Object onReadAccess(Object obj, Object value, long field){

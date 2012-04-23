@@ -50,6 +50,11 @@
 			<param name="exclude" value="org/deuce/utest/basic/IrrevocableContextTest.class"/>
 		</antcall>
 		<antcall target="junits">
+			<param name="sysprop" value="org.deuce.transaction.contextClass"/>
+			<param name="value" value="org.deuce.transaction.tl2twilight.Context"/>
+			<param name="exclude" value=""/> <!-- unsure about this one -->
+		</antcall>
+		<antcall target="junits">
 			<param name="sysprop" value="org.deuce.transaction.global"/>
 			<param name="value" value="true"/>
 			<param name="exclude" value="org/deuce/**"/>

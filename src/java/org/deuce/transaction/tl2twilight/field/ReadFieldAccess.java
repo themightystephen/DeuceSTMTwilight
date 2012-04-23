@@ -47,7 +47,7 @@ public class ReadFieldAccess {
 	public void init(Object reference, long field){
 		this.reference = reference;
 		this.field = field;
-		this.hash = (System.identityHashCode(reference) + (int)field) & LockManager.LOCK_TABLE_SIZE; // was: this.hash = (System.identityHashCode(reference) + (int)field) & LockManager.MASK;
+		this.hash = (System.identityHashCode(reference) + (int)field) & LockManager.HASH_MASK;
 	}
 
 	@Override
