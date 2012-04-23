@@ -203,6 +203,7 @@ final public class Context implements TwilightContext {
 	 */
 	@Override
 	public boolean prepareCommit() {
+		System.out.println(Thread.currentThread()+" Inside prepareCommit() using Context object "+this);
 		// NOTE: the optimisation below is not seen in the twilight algorithm...but then again, it's an implementation detail and so you might not expect to; for now we leave it out
 //		// optimisation for read-only transactions (no need to reserve (transactional) variables in the writeset because it's empty. Also no need to validate readset).
 //		if (writeSet.isEmpty()) {
@@ -225,6 +226,7 @@ final public class Context implements TwilightContext {
 	 */
 	@Override
 	public boolean finalizeCommit() {
+		System.out.println(Thread.currentThread()+" Inside finalizeCommit() using Context object "+this);
 		try {
 			// return false if read set still inconsistent even after Twilight zone
 			if(state != ReadSetState.CONSISTENT) {

@@ -74,7 +74,7 @@ import org.deuce.transform.twilight.method.StaticInitialiserTransformer;
 
 @Exclude
 public class Twilight {
-	private static final TwilightContext context = TwilightContextDelegator.getInstance();
+	//private static final TwilightContext context = TwilightContextDelegator.getInstance(); // DON'T DO/USE THIS!
 
 	// ------------------------------------------------------------------------
 	// (SOME) TWILIGHT WORKFLOW OPERATIONS
@@ -87,7 +87,7 @@ public class Twilight {
 	 * annotated methods.</p>
 	 */
 	public static boolean prepareCommit() {
-		return context.prepareCommit();
+		return TwilightContextDelegator.getInstance().prepareCommit();
 	}
 
 	/**
@@ -101,7 +101,7 @@ public class Twilight {
 	 * sense!).</p>
 	 */
 	public static void restart() {
-		context.restart();
+		TwilightContextDelegator.getInstance().restart();
 	}
 
 	// ------------------------------------------------------------------------
@@ -114,7 +114,7 @@ public class Twilight {
 	 * <code>@TwilightInconsistent</code> methods.</p>
 	 */
 	public static void reload() {
-		context.reload();
+		TwilightContextDelegator.getInstance().reload();
 	}
 
 	/**
@@ -125,7 +125,7 @@ public class Twilight {
 	 * <code>@TwilightInconsistent</code> methods.</p>
 	 */
 	public static void ignoreUpdates() {
-		context.ignoreUpdates();
+		TwilightContextDelegator.getInstance().ignoreUpdates();
 	}
 
 	/**
@@ -140,7 +140,7 @@ public class Twilight {
 	 * <code>false</code> otherwise
 	 */
 	public static boolean isInconsistent(int tagID) {
-		return context.isInconsistent(tagID);
+		return TwilightContextDelegator.getInstance().isInconsistent(tagID);
 	}
 
 	/**
@@ -154,7 +154,7 @@ public class Twilight {
 	 * @return TODO: semantics of return value are not clear yet...
 	 */
 	public static boolean isOnlyInconsistent(int tagID) {
-		return context.isOnlyInconsistent(tagID);
+		return TwilightContextDelegator.getInstance().isOnlyInconsistent(tagID);
 	}
 
 	// ------------------------------------------------------------------------
@@ -172,7 +172,7 @@ public class Twilight {
 	 * @return Unique integer identifier which represents a new tag
 	 */
 	public static int newTag() {
-		return context.newTag();
+		return TwilightContextDelegator.getInstance().newTag();
 	}
 
 //	/**
@@ -247,7 +247,7 @@ public class Twilight {
 //
 //		// ACTUALLY, I'm not sure if the 'owner' object simply refers to the original owner regardless of whether there is a separate fields holder class...
 //		addressFieldOwnerObject = fieldOwnerObject;
-//		context.markField(tagID, addressFieldOwnerObject, address); // FIXME: not 100% sure.
+//		TwilightContextDelegator.getInstance().markField(tagID, addressFieldOwnerObject, address); // FIXME: not 100% sure.
 //	}
 //
 //	/**
@@ -288,6 +288,6 @@ public class Twilight {
 //
 //		// ACTUALLY, I'm not sure if the 'owner' object simply refers to the original owner regardless of whether there is a separate fields holder class...
 //		addressFieldOwnerObject = fieldOwnerObject;
-//		context.markField(tagID, addressFieldOwnerObject, address); // FIXME: not 100% sure.
+//		TwilightContextDelegator.getInstance().markField(tagID, addressFieldOwnerObject, address); // FIXME: not 100% sure.
 //	}
 }

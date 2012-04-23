@@ -4,7 +4,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class Main {
-	private static final int NUM_THREADS = 5;
+	private static final int NUM_THREADS = 25;
 	private static final int NUM_TASKS = 500; // TODO: later change back to 2000
 
 	public static void main(String[] args) {
@@ -34,7 +34,7 @@ public class Main {
 		// shutdown executor and wait for all tasks to complete (or fail)
 		es.shutdown();
 		try {
-			es.awaitTermination(5, TimeUnit.SECONDS);
+			es.awaitTermination(1, TimeUnit.HOURS); // wait so long that in practice it waits long enough for all tasks to complete
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}

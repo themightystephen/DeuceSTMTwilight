@@ -171,7 +171,7 @@ public class LockManager {
 		if( clock < (versionedLock & VERSION_MASK) || (versionedLock & LOCK_MASK) == LOCKED) {
 			// TODO: debug this bit to find out which of the above conditions is continually not holding (on some runs).
 			System.out.println(Thread.currentThread()+" Throwing exception on checkLock() of field (1)");
-			System.out.println(Thread.currentThread()+" Clock less than version of field?: "+(clock < (versionedLock & VERSION_MASK)));
+			System.out.println(Thread.currentThread()+" Clock less than version of field?: "+(clock < (versionedLock & VERSION_MASK))+"; clock = "+clock+", versionedLock = "+(versionedLock & VERSION_MASK));
 			System.out.println(Thread.currentThread()+" Versioned-lock is LOCKED?: "+((versionedLock & LOCK_MASK) == LOCKED));
 			throw FAILURE_EXCEPTION;
 		}

@@ -63,7 +63,7 @@ public class ReadSet {
 			@Override
 			public boolean execute(ReadFieldAccess rfa) {
 				LockManager.checkLock(rfa.hashCode(), clock);
-	        	rfa.clear();
+	        	rfa.clear(); // NOTE: I don't know why the original TL2 implementation does this. I just copied. I don't know where/if it comes into play.
 	        	return true;
 			}
 		});

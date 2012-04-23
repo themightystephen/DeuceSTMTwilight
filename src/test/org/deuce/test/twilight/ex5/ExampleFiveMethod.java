@@ -1,4 +1,6 @@
 package org.deuce.test.twilight.ex5;
+import java.util.Random;
+
 import org.deuce.Atomic;
 //import org.deuce.transaction.Twilight;
 
@@ -30,6 +32,7 @@ import org.deuce.Atomic;
 
 public class ExampleFiveMethod {
 	public int counter = 0; // pretend counter is a shared variable that is accessed by many threads/transactions (actually, it is properly shared if we have multiple threads invoking example() on the same object)
+	private static Random r = new Random();
 
 	// programmer can specify for each trasnasctional method whether twilight 'mode' should be available (as an attribute of the annotation)
 	// If it is, then that's cool, the user goes ahead and is allowed to use the Twilight API operations
@@ -40,6 +43,12 @@ public class ExampleFiveMethod {
 	public void example() {
 		System.out.println("Transaction running in thread "+ Thread.currentThread());
 		int pos = counter + 1;
+		// increase chances of race condition (if not marked as @Atomic of course)
+		try {
+			Thread.sleep(30);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
 		counter = pos;
 	}
 }
