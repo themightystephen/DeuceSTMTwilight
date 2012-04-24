@@ -587,12 +587,22 @@ final public class Context implements TwilightContext {
 		// construct new ReadFieldAccess and store temporarily in currentReadFieldAccess
 		ReadFieldAccess readEntry = new ReadFieldAccess(obj, field);
 		currentReadFieldAccess = readEntry;
-//		System.out.println(currentReadFieldAccess.hashCode());
-		System.out.println(Thread.currentThread()+" Hashcode of ReadFieldAccess with owner object "+obj+" and field "+field+" is "+currentReadFieldAccess.hashCode());
+
+		/*
+		 * NOTE: Having this println statement uncommented sometimes has some STRANGE (bad) effects. Seems to occur when the field being accessed
+		 * is a reference type (i.e. an object) (although remember that objects declared as final are not tracked by the STM system and so would
+		 * not be affected by this. Seems to be due to printing out 'obj' -- get a NullPointerException (if you make sure you catch the exception
+		 * inside the @Atomic method).
+		 *
+		 * REASON: because the object passed is a VERY SPECIAL kind of object that is returned from a method of the sun.misc.Unsafe class -- the
+		 * documentation for it says you're not meant to use it as a normal object but only to use it later as input to a different method of
+		 * sun.misc.Unsafe. See http://www.docjar.com/docs/api/sun/misc/Unsafe.html#staticFieldBase(Field).
+		 */
+		//System.out.println("object: "+obj);
 
 		// Check the read is valid (PRE-VALIDATION step described in the thesis on p32)
 		preValidationReadVersionedLock = LockManager.checkLock(currentReadFieldAccess.hashCode(), startTime);
-		System.out.println(Thread.currentThread()+" No exception happened during the checkLock in beforeReadAccess()");
+		System.out.println(Thread.currentThread()+" No exception happened during the checkLock in beforeReadAccess");
 		// Pre-validation passed, so add to read set (if post-validation subsequently fails, not a problem since transaction will just abort and restart)
 		readSet.add(currentReadFieldAccess);
 	}
@@ -608,6 +618,7 @@ final public class Context implements TwilightContext {
 	private WriteFieldAccess onReadAccess(Object obj, long field){
 		// Check the read is still valid (same lock state and version as in pre-validation) (POST-VALIDATION step described in the thesis on p32)
 		LockManager.checkLock(currentReadFieldAccess.hashCode(), startTime, preValidationReadVersionedLock);
+		System.out.println(Thread.currentThread()+" No exception happened during the checkLock in onReadAccess");
 
 		// Check if it is already included in the write set (returns null if not in write set) (NOTE: contains method uses equals() method of one of the objects to do this - ReadFieldAcess and WriteFieldAccess objects share common type (ReadFieldAccess) and also common equals and hashcode methods)
 		return writeSet.contains(currentReadFieldAccess);
