@@ -120,8 +120,8 @@ public class WriteSet{
 	public void unlock() {
 		lockedSet.forEach(new TIntProcedure() {
 			@Override
-			public boolean execute(int value) {
-				LockManager.unlock(value,locksMarker);
+			public boolean execute(int hashcode) {
+				LockManager.unlock(hashcode,locksMarker);
 				return true;
 			}
 		});
@@ -140,11 +140,14 @@ public class WriteSet{
 		// publish writeset!
 		publish();
 
+		// sample clock
+		final int commitTime = Context.clock.incrementAndGet();
+
 		// then unlock writeset (NOTE: different method of LockManager called for case of successful commit)
 		lockedSet.forEach(new TIntProcedure() {
 			@Override
 			public boolean execute(int hashcode) {
-				LockManager.setAndReleaseLock(hashcode, Context.clock.incrementAndGet(), locksMarker);
+				LockManager.setAndReleaseLock(hashcode, commitTime, locksMarker);
 				return true;
 			}
 		});

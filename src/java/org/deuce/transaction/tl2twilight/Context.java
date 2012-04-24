@@ -139,9 +139,9 @@ final public class Context implements TwilightContext {
 	private List<Set<ReadFieldAccess>> tagFields;
 
 	// EXCEPTIONS
-	private static final TransactionException READ_IN_TWILIGHT_EXCEPTION = new TransactionException( "Ordinary reads not allowed in Twilight code. Use *reread* operation instead.");
-	private static final TransactionException WRITE_IN_TWILIGHT_EXCEPTION = new TransactionException( "Ordinary writes not allowed in Twilight code. Use *update* operation instead.");
-	private static final TransactionException TAG_ALREADY_CONSISTENT_EXCEPTION = new TransactionException( "isOnlyInconsistent(tag) was invoked when the given tag is already consistent. Only invoke isOnlyInconsistent(tag) when the given tag is already known to be inconsistent.");
+	private static final AbortTransactionException READ_IN_TWILIGHT_EXCEPTION = new AbortTransactionException( "Ordinary reads not allowed in Twilight code. Use *reread* operation instead.");
+	private static final AbortTransactionException WRITE_IN_TWILIGHT_EXCEPTION = new AbortTransactionException( "Ordinary writes not allowed in Twilight code. Use *update* operation instead.");
+	private static final AbortTransactionException TAG_ALREADY_CONSISTENT_EXCEPTION = new AbortTransactionException( "isOnlyInconsistent(tag) was invoked when the given tag is already consistent. Only invoke isOnlyInconsistent(tag) when the given tag is already known to be inconsistent.");
 
 	//The atomicBlockId argument allows the transaction to log information about the specific atomic block (statically assigned in the bytecode).
 	@Override

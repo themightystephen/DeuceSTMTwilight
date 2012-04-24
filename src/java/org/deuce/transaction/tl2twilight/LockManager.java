@@ -199,7 +199,6 @@ public class LockManager {
 			System.out.println(Thread.currentThread()+" Throwing exception on checkLock() of field (2)");
 			throw FAILURE_EXCEPTION;
 		}
-
 	}
 
 	/**
@@ -217,7 +216,6 @@ public class LockManager {
 		System.out.println(Thread.currentThread()+" Lock part: "+Integer.toBinaryString(unlockedValue));
 		System.out.println(Thread.currentThread()+" Vers part: "+Integer.toBinaryString(versionValue));
 		locks.set(lockIndex, versionValue | unlockedValue);
-		System.out.println();
 
 		clearSelfLock(lockIndex, contextLocks);
 	}
