@@ -1,4 +1,4 @@
-package org.deuce.test.twilight.ex9;
+package org.deuce.test.twilight.ex10;
 
 import java.util.Random;
 
@@ -19,8 +19,9 @@ import org.deuce.transaction.Twilight;
  * @author Stephen Tuttlebee
  *
  */
-public class ExampleNine {
+public class ExampleTen {
 	private static final Random r = new Random();
+	public static int explicitRestartCounter = 0;
 
 	public int counterA = 0;
 	public int counterB = 0;
@@ -63,11 +64,20 @@ public class ExampleNine {
 		boolean consistent = Twilight.prepareCommit();
 		/* twilight zone */
 		if(consistent) {
+			// read shared var in twilight zone
+			try {
+				System.out.println(counterA);
+			}
+			catch(Exception e) {
+				e.printStackTrace();
+			}
 			System.out.println("Irreversible operation in thread "+Thread.currentThread()+"!");
+//			try { Thread.sleep(5000); } catch (InterruptedException e) { e.printStackTrace(); }
 		}
 		else {
 			System.out.println("Restarting in thread "+Thread.currentThread());
-			try { Thread.sleep(6000); } catch (InterruptedException e) { e.printStackTrace(); }
+			//explicitRestartCounter++; // NOTE: can't use this because I'm accessing (writing) a field which I did not access in the transactional zone; the readset and writeset of a transaction must not be extended in the twilight zone.
+			//try { Thread.sleep(6000); } catch (InterruptedException e) { e.printStackTrace(); } // NOTE: will not always see any *observable* sleeping because another thread can get scheduled in and so I would start seeing output from a different thread (the JVM/OS are just trying to be efficient)
 			Twilight.restart(); // simple conflict resolution strategy for now
 		}
 	} // remember, finalizeCommit operation is implicit at the end of the method block

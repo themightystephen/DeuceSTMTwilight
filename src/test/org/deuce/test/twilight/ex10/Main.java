@@ -1,4 +1,4 @@
-package org.deuce.test.twilight.ex9;
+package org.deuce.test.twilight.ex10;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -7,8 +7,7 @@ import java.util.concurrent.TimeUnit;
 import org.deuce.transaction.TransactionException;
 
 /**
- * Test more typical use of Twilight operations. We only use restart operation in twilight zone
- * at the moment.
+ * This test is actually just a minor extension to that seen in ex9.
  *
  * @author Stephen Tuttlebee
  */
@@ -22,7 +21,7 @@ public class Main {
 		// construct pool of threads
 		ExecutorService es = Executors.newFixedThreadPool(NUM_THREADS);
 
-		final ExampleNine ex = new ExampleNine();
+		final ExampleTen ex = new ExampleTen();
 		Runnable task = new Runnable() {
 			@Override
 			public void run() {
