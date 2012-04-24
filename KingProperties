@@ -1,1 +1,3 @@
-targetClasses=org.deuce.test.twilight.ex9.
+targetClasses=org.deuce.test.twilight.ex9.,org.deuce.transaction.tl2twilight.LockManager,org.deuce.transaction.tl2twilight.ReadSet,org.deuce.transaction.tl2twilight.WriteSet
+
+#org.deuce.transaction.tl2twilight.Context causes all its inner classes to be instrumented as well! arggh!
