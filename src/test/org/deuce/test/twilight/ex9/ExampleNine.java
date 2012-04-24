@@ -45,12 +45,12 @@ public class ExampleNine {
 		}
 
 		// increase liklihood of race condition
-		// -- basically, I've got this here with the aim to force an inconsistency to be found in the prepareCommit.
+		// -- basically, I've got this sleep here with the aim to force an inconsistency to be found in the prepareCommit.
 		// Unfortunately this technique isn't really working... -- I need a different way. Maybe just have two separate
 		// @Atomic methods which access a common piece of shared data, with appropriate sleeping to make it extremely
 		// likely that the prepareCommit will return false -- also, only having two transactions will make it easier
 		// for me to reason about in my head
-		try { Thread.sleep(r.nextInt(3)); } catch (InterruptedException e1) { e1.printStackTrace(); }
+		//try { Thread.sleep(r.nextInt(3)); } catch (InterruptedException e1) { e1.printStackTrace(); }
 
 		boolean consistent = Twilight.prepareCommit();
 		/* twilight zone */
